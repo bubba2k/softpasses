@@ -15,14 +15,14 @@ use hittable::{HittableList, Sphere, Plane, Parallelogram};
 use material::{MatLambertDiffuse, MatFaceDebug, MatGlass, MatNormalDebug, MatPrincipled};
 use util::Interval;
 
-use crate::hittable::Parallelepiped;
+use crate::{hittable::Parallelepiped, vec3::CoordinatePlane};
 
 fn main() {
     let width: u32  = 300 * 2;
     let height: u32 = 200 * 2;
     let aspect_ratio: f32 = width as f32 / height as f32;
 
-    let pose = camera::Pose::look_at(Vec3f::new(-2.0, 2.0, 1.0), 
+    let pose = camera::Pose::look_at(Vec3f::new(-2.0, 1.5, 1.0), 
                                             Vec3f::new(0.0, 0.0, -1.0));
     let lens = camera::Lens::new(
         35,
@@ -49,23 +49,17 @@ fn main() {
 
     let mut world: HittableList = HittableList::default();
 
-    let cube = Parallelepiped::new(Vec3f::new(-1.0, 0.0, -2.0), 
-                                                      Vec3f::new(1.0, 0.0, -2.0),
-                                                                        Vec3f::new(-1.0, 0.0, -1.5),
-                                                                        Vec3f::new(-1.0, 1.0, -2.0), 
-                                                                        mat_normals.clone());
-    let rect = Parallelogram::from_points(Vec3f::new(-1.0, 0.0, -1.5), 
-                                                          Vec3f::new(-1.0,0.8, -1.5),
-                                                          Vec3f::new(1.0, 0.0, -1.5),
-                                                         mat_facedebug.clone());
+    let cube = Parallelepiped::new_cube(
+        Vec3f::new(-1.0, 0.0, -1.6),
+    Vec3f::new(1.0, 0.0, -0.2), vec3::PLANE_XZ, 2.0, mat_facedebug.clone());
 
    // world.push(Sphere::new(Vec3f::new(0.0, -100.5, 0.0), 100.0, matp_floor));
     world.push(Sphere::new(Vec3f::new(0.0, 0.0, -1.2), 0.5, lambertian_red));
     world.push(Sphere::new(Vec3f::new(-1.0, 0.0, -1.0), 0.5, mat_glass));
     world.push(Sphere::new(Vec3f::new(-1.0, 0.0, -1.0), 0.4, mat_glass_inside));
     world.push(Sphere::new(Vec3f::new( 1.0, 0.0, -1.0), 0.5, matp_brushedmet));
-    world.push(rect);
     world.push(Plane::new(Vec3f::new(0.0, 1.0, 0.0), -0.5, matp_floor));
+    world.push(cube);
 
     let render_result = camera.render(&world);
 

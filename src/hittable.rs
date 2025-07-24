@@ -287,37 +287,7 @@ impl Parallelogram {
                 }
             }
         };
-        // Find the coordinate plane to project the rectangle (and later the hit point) onto.
-        // We choose either the XY or XZ, which ever is the "least perpendicular" -> has the greatest absolute angle
-        // to the rectangles normal. Strictly speaking we only need to find one that is simply not
-        // orthogonal, but this might help with precision a little bit.
 
-        /* 
-        if Self::PLANE_XY.dot(&normal).abs() > Self::PLANE_XZ.dot(&normal).abs() {
-            // T project on the XY plane, simply drop the Z coordinate.
-            // Since the function for the projected bounds check expects XY coordinates, 
-            // we do not have to do anything.
-            let projected_botleft = bottom_left;
-            let projected_botright = bottom_right;
-            let projected_topleft = top_left;
-            let projected_topright = bottom_right + up;
-
-            (ProjectionPlane::XY, [projected_botleft, projected_botright, projected_topright, projected_topleft])
-        } else {
-            // Project onto the XZ plane. So, drop the Y and replace it with the Z coord, since
-            // that is how the bounds checking function expects it later on.
-            let projected_botleft = Vec3f::new(bottom_left.x(), bottom_left.z(), 0.0);
-            let projected_botright = Vec3f::new(bottom_right.x(), bottom_right.z(), 0.0);
-            let projected_topleft = Vec3f::new(top_left.x(), top_left.z(), 0.0);
-            let top_right = bottom_right + up;
-            let projected_topright = Vec3f::new(top_right.x(), top_right.z(), 0.0);
-
-            // We have to flip the order here as well. "Z  up" is -Z, but expected "Y up" is positive.
-            // Z can stay negative, but wee need to reorder to maintain CCW order
-            (ProjectionPlane::XZ, [projected_topleft, projected_topright, projected_botright, projected_botleft] )
-        }; */
-
- 
         Rc::new(Parallelogram {
             normal: normal.normalize(),
             d: signed_distance,
@@ -398,36 +368,39 @@ impl Parallelepiped {
     pub fn new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Rc<dyn Material>) -> Rc<Self> {
         let up = back_top_left - back_bottom_left;
         let right = back_bottom_right - back_bottom_left;
+        let depth = front_bottom_left - back_bottom_left;
 
-        let front_top_left = front_bottom_left + up;
-        let front_bottom_right = front_top_left + right;
+        // Compute all 8 corners
         let back_top_right = back_bottom_right + up;
         let front_top_left = front_bottom_left + up;
+        let front_bottom_right = back_bottom_right + depth;
         let front_top_right = front_bottom_right + up;
 
         let mut list: HittableList = HittableList::default();
 
-        // Front
+        // Front face
         list.push(Parallelogram::from_points(front_bottom_left, front_top_left, front_bottom_right, material.clone()));
-        // Back
-        list.push(Parallelogram::from_points(back_bottom_right, back_top_right, back_bottom_left, material.clone()));
-        // Top
+        // Back face
+        list.push(Parallelogram::from_points(back_bottom_left, back_top_left, back_bottom_right, material.clone()));
+        // Top face
         list.push(Parallelogram::from_points(front_top_left, back_top_left, front_top_right, material.clone()));
-        // Bottom
-        list.push(Parallelogram::from_points(back_bottom_right, front_bottom_left, back_bottom_left, material.clone()));
-        // Left
+        // Bottom face
+        list.push(Parallelogram::from_points(back_bottom_left, front_bottom_left, back_bottom_right, material.clone()));
+        // Left face
         list.push(Parallelogram::from_points(back_bottom_left, back_top_left, front_bottom_left, material.clone()));
-        // Right
-        list.push(Parallelogram::from_points(front_bottom_right, front_top_right, back_bottom_right, material.clone()));
-
+        // Right face
+        list.push(Parallelogram::from_points(back_bottom_right, back_top_right, front_bottom_right, material.clone()));
 
         Rc::new(Parallelepiped { list: list, material: material })
     }
+ 
+    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32, material: Rc<dyn Material>) -> Rc<Self> {
+        let depth_dir = up_dir.cross(&right_dir).normalize();
 
-    /* 
-    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32) -> Rc<Self> {
-        let depth_dir = 
+        let back_bottom_left = front_bottom_left + depth_dir * size;
+        let back_bottom_right = back_bottom_left + right_dir.normalize() * size;
+        let back_top_left = back_bottom_left + up_dir.normalize() * size;
 
         Parallelepiped::new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material)
-    } */
+    }
 }
