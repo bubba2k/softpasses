@@ -1,9 +1,9 @@
 use std::rc::Rc;
 
 use crate::vec3::Vec3f;
-use crate::util::{self, rand_bool};
+use crate::util;
 use crate::{ray::Ray, vec3::Color};
-use crate::hittable::{self, HitRecord};
+use crate::hittable::HitRecord;
 
 pub trait Material {
     // Returns None if the ray was absorbed.
@@ -15,6 +15,7 @@ pub trait Material {
 pub struct MatNormalDebug {}
 
 impl Material for MatNormalDebug {
+    #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         let color = if hit.front_face {
             (hit.normal + 1.0) * 0.5
@@ -37,11 +38,12 @@ impl MatNormalDebug {
 pub struct MatFaceDebug {}
 
 impl Material for MatFaceDebug {
+    #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         let color = if hit.front_face {
-            Color::new(0.2, 0.8, 0.2)
+            Color::new(0.0, 1.0, 0.0)
         } else {
-            Color::new(0.8, 0.2, 0.2)
+            Color::new(1.0, 0.0, 0.0)
         };
         (None, 
          Some(color))
@@ -66,6 +68,7 @@ impl MatPoorDiffuse {
 }
 
 impl Material for MatPoorDiffuse {
+    #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         let new_dir = util::rand_unit_vec_on_hemisphere(&hit.normal);
         let new_ray = Ray::new(&hit.point, &new_dir.normalize());
@@ -87,6 +90,7 @@ impl MatLambertDiffuse {
 }
 
 impl Material for MatLambertDiffuse {
+    #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         // Find the new scatter dir :)
         let new_dir = (util::rand_unit_vec() + hit.normal).normalize(); 

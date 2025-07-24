@@ -9,6 +9,27 @@ pub struct Vec3<T> {
     v: [T;3]
 }
 
+pub const PLANE_XY: Vec3f = Vec3f::new(0.0, 0.0, 1.0);
+pub const PLANE_XZ: Vec3f = Vec3f::new(0.0, 1.0, 0.0);
+pub const PLANE_YZ: Vec3f = Vec3f::new(1.0, 0.0, 0.0);
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CoordinatePlane {
+    XY,
+    XZ,
+    YZ,
+}
+
+impl CoordinatePlane {
+    pub const fn normal(&self) -> Vec3f {
+        match self {
+            Self::XY => PLANE_XY,
+            Self::XZ => PLANE_XZ,
+            Self::YZ => PLANE_YZ,
+        }
+    }
+}
+
 impl<T: Add<Output = T> + Copy> Add for Vec3<T> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
@@ -273,4 +294,13 @@ impl<T> Index<usize> for Vec3<T> {
     fn index(&self, index: usize) -> &Self::Output {
         &self.v[index]
     }
+}
+
+pub fn point_left_of_edge(point: &Vec3f, q: &Vec3f, r: &Vec3f) -> bool {
+    let p = point;
+
+    let det = p.x() * q.y() + p.y() * r.x() + q.x() * r.y() 
+            - r.x() * q.y() - r.y() * p.x() - q.x() * p.y();
+
+    det > 0.0
 }

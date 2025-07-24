@@ -1,3 +1,6 @@
+// Allow dead code for now
+#![allow(dead_code)]
+
 mod ppm;
 mod vec3;
 mod camera;
@@ -6,12 +9,13 @@ mod hittable;
 mod util;
 mod material;
 
-use vec3::{Vec3f};
+use vec3::{Vec3f, Color};
 use camera::{Camera};
-use hittable::{HittableList, Sphere, Plane};
-use material::{MatLambertDiffuse};
+use hittable::{HittableList, Sphere, Plane, Parallelogram};
+use material::{MatLambertDiffuse, MatFaceDebug, MatGlass, MatNormalDebug, MatPrincipled};
+use util::Interval;
 
-use crate::{hittable::Rectangle, material::{MatEmission, MatFaceDebug, MatGlass, MatMetal, MatNormalDebug, MatPoorDiffuse, MatPrincipled, Material}, util::Interval, vec3::{Color, Vec3}};
+use crate::hittable::Parallelepiped;
 
 fn main() {
     let width: u32  = 300 * 2;
@@ -22,13 +26,13 @@ fn main() {
                                             Vec3f::new(0.0, 0.0, -1.0));
     let lens = camera::Lens::new(
         35,
-        45, 
+        20, 
         aspect_ratio,
         3.44,
     0.0);
     let settings = camera::RenderSettings {
         samples_per_pixel: 10,
-        max_bounces: 10,
+        max_bounces: 50,
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 10000.0)
@@ -44,19 +48,24 @@ fn main() {
     let mat_normals = MatNormalDebug::new();
 
     let mut world: HittableList = HittableList::default();
-    let rect = Rectangle::from_points(Vec3f::new(-1.0, 0.0, -1.5), 
-                                                          Vec3f::new(-1.0, 0.3, -1.5),
-                                                          Vec3f::new(1.0, 0.0, -1.5),
-                                                          mat_normals.clone());
 
-    let plane = Plane::new(Vec3f::new(0.0, 1.0, 0.0), -0.5, matp_floor);
+    let cube = Parallelepiped::new(Vec3f::new(-1.0, 0.0, -2.0), 
+                                                      Vec3f::new(1.0, 0.0, -2.0),
+                                                                        Vec3f::new(-1.0, 0.0, -1.5),
+                                                                        Vec3f::new(-1.0, 1.0, -2.0), 
+                                                                        mat_normals.clone());
+    let rect = Parallelogram::from_points(Vec3f::new(-1.0, 0.0, -1.5), 
+                                                          Vec3f::new(-1.0,0.8, -1.5),
+                                                          Vec3f::new(1.0, 0.0, -1.5),
+                                                         mat_facedebug.clone());
+
    // world.push(Sphere::new(Vec3f::new(0.0, -100.5, 0.0), 100.0, matp_floor));
     world.push(Sphere::new(Vec3f::new(0.0, 0.0, -1.2), 0.5, lambertian_red));
     world.push(Sphere::new(Vec3f::new(-1.0, 0.0, -1.0), 0.5, mat_glass));
     world.push(Sphere::new(Vec3f::new(-1.0, 0.0, -1.0), 0.4, mat_glass_inside));
     world.push(Sphere::new(Vec3f::new( 1.0, 0.0, -1.0), 0.5, matp_brushedmet));
     world.push(rect);
-    world.push(plane);
+    world.push(Plane::new(Vec3f::new(0.0, 1.0, 0.0), -0.5, matp_floor));
 
     let render_result = camera.render(&world);
 

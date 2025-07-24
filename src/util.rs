@@ -1,5 +1,5 @@
 use std::f32;
-use crate::vec3::{Vec3, Vec3f};
+use crate::vec3::Vec3f;
 
 #[derive(Clone, Copy)]
 pub struct Interval {

@@ -1,10 +1,9 @@
-use crate::material::{self, MatLambertDiffuse, Material};
+use crate::material::{Material};
 use crate::ray::{Ray};
-use crate::vec3::Vec3f;
+use crate::vec3::{self, Vec3f, CoordinatePlane};
 use crate::util::Interval;
 
 use core::f32;
-use std::cell::BorrowMutError;
 use std::rc::Rc;
 
 pub struct HitRecord {
@@ -205,30 +204,21 @@ impl Hittable for Plane {
     }
 }
 
-enum CoordinatePlane {
-    XY,
-    YZ,
-    XZ,
-}
-
-pub struct Rectangle {
+pub struct Parallelogram {
     // The plane the rectangle lies on in HNF
     normal: Vec3f,
     d: f32,    
     
-    // The rectangles bottom left (on the projection plane) point
-    botleft: Vec3f, 
-    width: f32, 
-    height: f32,
+    // The rectangles 4 corners (on the projection plane) point in CCW order
+    projected_bounds: [Vec3f;4],
 
-    // The coordinate plane to project plane and intersection point onto 
-    // for bounds checking
-    projection_plane: CoordinatePlane,
+    // The coordinate plane to project intersection point onto for bounds checking
+    projection_plane: vec3::CoordinatePlane,
 
     material: Rc<dyn Material>,
 }
 
-impl Rectangle {
+impl Parallelogram {
     pub fn from_points(bottom_left: Vec3f, top_left: Vec3f, bottom_right: Vec3f, mat: Rc::<dyn Material>) -> Rc<Self> {
         // Together with `bottom_left`, these three letters form represent the plane in parametric form.
         let up = top_left - bottom_left;
@@ -245,28 +235,106 @@ impl Rectangle {
             -distance
         };
 
-        let width  = right.length();
-        let height = up.length();
+        // Find the coordinate plane "most parallel" to the rect plane, but most importantly, also avoid any orthogonal ones.
+        let projection_plane = [CoordinatePlane::XY, CoordinatePlane::XZ, CoordinatePlane::YZ]
+            .map(|p| (p, p.normal())).iter()
+            .max_by(|a, b| a.1.dot(&normal).abs().total_cmp(&b.1.dot(&normal).abs()))
+            .map(|x| x.0).unwrap();
 
-        // TODO: Project the plane on one of the coordinate planes.
-        // Then check bounds later in try_hit func
+        let projected_bounds = 
+        match projection_plane {
+            CoordinatePlane::XY => {
+                let projected_botleft = bottom_left;
+                let projected_botright = bottom_right;
+                let projected_topleft = top_left;
+                let projected_topright = bottom_right + up;
 
-        Rc::new(Rectangle {
-            width: width,
-            height: height,
-            botleft: bottom_left,
+                if vec3::PLANE_XY.dot(&normal) > 0.0 {
+                    [projected_botleft, projected_botright, projected_topright, projected_topleft]
 
+                } else {
+                    [projected_topleft, projected_topright, projected_botright, projected_botleft]
+                }
+            },
+            CoordinatePlane::XZ => {
+                // Project onto the XZ plane. So, drop the Y and replace it with the Z coord, since
+                // that is how the bounds checking function expects it later on.
+                let projected_botleft = Vec3f::new(bottom_left.x(), bottom_left.z(), 0.0);
+                let projected_botright = Vec3f::new(bottom_right.x(), bottom_right.z(), 0.0);
+                let projected_topleft = Vec3f::new(top_left.x(), top_left.z(), 0.0);
+                let top_right = bottom_right + up;
+                let projected_topright = Vec3f::new(top_right.x(), top_right.z(), 0.0);
+
+                if vec3::PLANE_XZ.dot(&normal) > 0.0 {
+                    [projected_topleft, projected_topright, projected_botright, projected_botleft]
+                } else {
+                    [projected_botleft, projected_botright, projected_topright, projected_topleft]
+                }
+            },
+            CoordinatePlane::YZ => {
+                // Project on XY plane. Drop X coordinate.
+                let projected_botleft = Vec3f::new(bottom_left.y(), bottom_left.z(), 0.0);
+                let projected_botright = Vec3f::new(bottom_right.y(), bottom_right.z(), 0.0);
+                let projected_topleft = Vec3f::new(top_left.y(), top_left.z(), 0.0);
+                let top_right = bottom_right + up;
+                let projected_topright = Vec3f::new(top_right.y(), top_right.z(), 0.0);
+
+                if vec3::PLANE_YZ.dot(&normal) > 0.0 {
+                    [projected_botleft, projected_botright, projected_topright, projected_topleft]
+
+                } else {
+                    [projected_topleft, projected_topright, projected_botright, projected_botleft]
+                }
+            }
+        };
+        // Find the coordinate plane to project the rectangle (and later the hit point) onto.
+        // We choose either the XY or XZ, which ever is the "least perpendicular" -> has the greatest absolute angle
+        // to the rectangles normal. Strictly speaking we only need to find one that is simply not
+        // orthogonal, but this might help with precision a little bit.
+
+        /* 
+        if Self::PLANE_XY.dot(&normal).abs() > Self::PLANE_XZ.dot(&normal).abs() {
+            // T project on the XY plane, simply drop the Z coordinate.
+            // Since the function for the projected bounds check expects XY coordinates, 
+            // we do not have to do anything.
+            let projected_botleft = bottom_left;
+            let projected_botright = bottom_right;
+            let projected_topleft = top_left;
+            let projected_topright = bottom_right + up;
+
+            (ProjectionPlane::XY, [projected_botleft, projected_botright, projected_topright, projected_topleft])
+        } else {
+            // Project onto the XZ plane. So, drop the Y and replace it with the Z coord, since
+            // that is how the bounds checking function expects it later on.
+            let projected_botleft = Vec3f::new(bottom_left.x(), bottom_left.z(), 0.0);
+            let projected_botright = Vec3f::new(bottom_right.x(), bottom_right.z(), 0.0);
+            let projected_topleft = Vec3f::new(top_left.x(), top_left.z(), 0.0);
+            let top_right = bottom_right + up;
+            let projected_topright = Vec3f::new(top_right.x(), top_right.z(), 0.0);
+
+            // We have to flip the order here as well. "Z  up" is -Z, but expected "Y up" is positive.
+            // Z can stay negative, but wee need to reorder to maintain CCW order
+            (ProjectionPlane::XZ, [projected_topleft, projected_topright, projected_botright, projected_botleft] )
+        }; */
+
+ 
+        Rc::new(Parallelogram {
             normal: normal.normalize(),
             d: signed_distance,
 
-            projection_plane: CoordinatePlane::XY,
-            
+            projected_bounds: projected_bounds,
+            projection_plane: projection_plane.clone(),
+
             material: mat,
         })
     }   
 }
 
-impl Hittable for Rectangle {
+impl Hittable for Parallelogram {
+    // Checking for Ray-Rectangle intersect involves two steps:
+    // 1. Finding intersect point between ray and the plane the rect lies on
+    // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
+    //    then perform a 2D Point-Contains-Polygon Check
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(&ray.dir) == 0.0 {
@@ -280,11 +348,86 @@ impl Hittable for Rectangle {
         } else {
             let p_intersect = ray.at(t_intersect);
 
-            Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, self.material.clone(), self.normal))
+            // Check what coordinate plane we have to project onto.
+            let projected_intersect_point = match self.projection_plane {
+                CoordinatePlane::XY => p_intersect,
+                CoordinatePlane::XZ => Vec3f::new(p_intersect.x(), p_intersect.z(), 0.0),
+                CoordinatePlane::YZ => Vec3f::new(p_intersect.y(), p_intersect.z(), 0.0),
+            };
+
+            // Check whether the point we found is inside the rectangles boundaries.
+            // Now perform the classic ole "left of all edges" check. Lets us know whether the projected point 
+            // lies inside the projected bounds.
+            let mut is_left_of_all = true; 
+            for i in 0..4 {
+                let a = &self.projected_bounds[i];
+                let b = &self.projected_bounds[(i + 1) % 4];
+                if !vec3::point_left_of_edge(&projected_intersect_point, a, b) { is_left_of_all = false; }
+            };
+
+            if is_left_of_all {
+                Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, self.material.clone(), self.normal))
+            } else {
+                None
+            }
         }
     }
 
     fn num_objects(&self) -> u32 {
         1
     }
+}
+
+pub struct Parallelepiped {
+    // List of the 6 faces 
+    list: HittableList,
+    material: Rc<dyn Material>,
+}
+
+impl Hittable for Parallelepiped {
+    fn num_objects(&self) -> u32 {
+        6
+    }
+
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+        self.list.try_hit(ray, t_interval, num_bounces)
+    }
+}
+
+impl Parallelepiped {
+    pub fn new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Rc<dyn Material>) -> Rc<Self> {
+        let up = back_top_left - back_bottom_left;
+        let right = back_bottom_right - back_bottom_left;
+
+        let front_top_left = front_bottom_left + up;
+        let front_bottom_right = front_top_left + right;
+        let back_top_right = back_bottom_right + up;
+        let front_top_left = front_bottom_left + up;
+        let front_top_right = front_bottom_right + up;
+
+        let mut list: HittableList = HittableList::default();
+
+        // Front
+        list.push(Parallelogram::from_points(front_bottom_left, front_top_left, front_bottom_right, material.clone()));
+        // Back
+        list.push(Parallelogram::from_points(back_bottom_right, back_top_right, back_bottom_left, material.clone()));
+        // Top
+        list.push(Parallelogram::from_points(front_top_left, back_top_left, front_top_right, material.clone()));
+        // Bottom
+        list.push(Parallelogram::from_points(back_bottom_right, front_bottom_left, back_bottom_left, material.clone()));
+        // Left
+        list.push(Parallelogram::from_points(back_bottom_left, back_top_left, front_bottom_left, material.clone()));
+        // Right
+        list.push(Parallelogram::from_points(front_bottom_right, front_top_right, back_bottom_right, material.clone()));
+
+
+        Rc::new(Parallelepiped { list: list, material: material })
+    }
+
+    /* 
+    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32) -> Rc<Self> {
+        let depth_dir = 
+
+        Parallelepiped::new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material)
+    } */
 }
