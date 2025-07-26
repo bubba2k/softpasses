@@ -98,9 +98,9 @@ impl Material for MatLambertDiffuse {
         // Those can occur if the generated random vector is parallel but opposite direction
         // of the hit normal.
         // We do not do that here though, because it caused weird bugs, somehow.
-
+        let light_attenuation = hit.normal.dot(&new_dir);
         let new_ray = Ray::new(&hit.point, &new_dir);
-        (Some(new_ray), Some(self.albedo.clone() * self.reflectance))
+        (Some(new_ray), Some(self.albedo.clone() * (self.reflectance * light_attenuation)))
     }
 }
 
@@ -189,18 +189,10 @@ pub struct MatEmission {
 
 impl Material for MatEmission {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        // Ignore direct hits
-        if hit.num_bounces == 0 {
-            let new_ray = Ray{orig: hit.point, dir: ray_in.dir};
-
-            (Some(new_ray), None)
-        } else {
-            // This material simply absorbs the ray and gives back a solid color of,
-            // potentially, quite high brightness.
-            // Apply the inverse square law here
-            let att_color = self.color * (self.strength / (hit.t * hit.t));
-            (None, Some(att_color))         
-        }
+        // This material simply absorbs the ray and gives back a solid color of,
+        // potentially, quite high brightness.
+        let att_color = self.color * self.strength;
+        (None, Some(att_color))
     }
 }
 

@@ -4,6 +4,7 @@ use crate::vec3::{Color, Pixel, Vec3f};
 use crate::util::{self, Interval};
 use core::f32;
 use std::fmt::Display;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 // A viewport describes the focus plane of a camera.
@@ -164,9 +165,13 @@ impl Camera {
         Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
     }
 
-    fn progress_bar(current_line: u32, total_lines: u32) {
+    fn progress_bar(current_line: u32, total_lines: u32, begin: &Instant) {
         let progress = (current_line as f32 / (total_lines - 1) as f32) * 100.0;
-        eprintln!("{}% done.", progress as u32);
+        let seconds_per_percent = begin.elapsed().as_secs_f32() / progress;
+        let est_sec_left = (seconds_per_percent * (100.0 - progress)) as u32;
+        let minutes = est_sec_left / 60;
+        let seconds = est_sec_left % 60;
+        eprintln!("{}% | {:02}:{:02} left", progress as u32, minutes, seconds);
     }
 
     fn background_color(&self, dir: Vec3f) -> Color {
@@ -175,7 +180,7 @@ impl Camera {
         // color simply by what direction we are looking in.
 
         // For now, it is a simple gradient along the y axis.
-        const BRIGHTNESS: f32 = 1.0;
+        const BRIGHTNESS: f32 = 0.0;
         const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
         const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
 
@@ -225,8 +230,10 @@ impl Camera {
 
         let offset_range = 1.0 / self.settings.image_height as f32;
 
+        let begin = Instant::now();
+
         for y in start_line..(start_line + num_lines) {
-            Self::progress_bar(y, self.settings.image_height);
+            Self::progress_bar(y, self.settings.image_height, &begin);
             for x in 0..self.settings.image_width {
                 let u = x as  f32 / self.settings.image_width as f32;
                 let v = y as f32 / self.settings.image_height as f32;

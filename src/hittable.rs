@@ -47,6 +47,8 @@ pub trait Hittable {
     // num_bounces: How many time this ray has bounced already.
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord>;
 
+    fn get_aabb(&self) -> AABoundingBox;
+
     // Return how many objects the hittable is made of. Just for bookkeepin'
     fn num_objects(&self) -> u32;
 }
@@ -74,9 +76,57 @@ fn hit_sphere(ray: &Ray, center: &Vec3f, radius: f32) -> Option<f32> {
     }
 }
 
+#[derive(Default, Clone)]
+pub struct AABoundingBox {
+    pub min: Vec3f,
+    pub max: Vec3f,
+}
+
+impl AABoundingBox {
+    pub fn new(min: Vec3f, max: Vec3f) -> Self {
+        AABoundingBox { min, max }
+    }
+
+    // Expand bounding box to a given point, if necessary
+    pub fn expand(&mut self, point: &Vec3f) {
+        self.min = Vec3f::new(
+            self.min.x().min(point.x()),
+            self.min.y().min(point.y()),
+            self.min.z().min(point.z()),
+        );
+        self.max = Vec3f::new(
+            self.max.x().max(point.x()),
+            self.max.y().max(point.y()),
+            self.max.z().max(point.z()),
+        );
+    }
+
+    // Ray-box intersection using slabs method
+    pub fn hit(&self, ray: &Ray, t_interval: Interval) -> bool {
+        let mut tmin = t_interval.min;
+        let mut tmax = t_interval.max;
+
+        for i in 0..3 {
+            let inv_d = 1.0 / ray.dir[i];
+            let mut t0 = (self.min[i] - ray.orig[i]) * inv_d;
+            let mut t1 = (self.max[i] - ray.orig[i]) * inv_d;
+            if inv_d < 0.0 {
+                std::mem::swap(&mut t0, &mut t1);
+            }
+            tmin = tmin.max(t0);
+            tmax = tmax.min(t1);
+            if tmax <= tmin {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 #[derive(Default)]
 pub struct HittableList {
     list: Vec<Rc<dyn Hittable>>,
+    aabb: AABoundingBox,
 }
 
 impl HittableList {
@@ -85,12 +135,18 @@ impl HittableList {
     }
 
     pub fn push(&mut self, hittable: Rc<dyn Hittable>) {
+        self.aabb.expand(&hittable.get_aabb().max);
+        self.aabb.expand(&hittable.get_aabb().min);
         self.list.push(hittable);
     }
 }
 
 impl Hittable for HittableList {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+        // Abort if the ray does not hit this lists bounding box (TODO: This seems to worsen performance,
+        // so it is turned off for now.)
+        // if !self.aabb.hit(ray, t_interval)  { return None; }
+
         // For all objects, try hitting them, discard Nones, then find the one with the
         // smallest t.
         self.list
@@ -100,6 +156,10 @@ impl Hittable for HittableList {
 
     fn num_objects(&self) -> u32 {
         self.list.len() as u32
+    }
+
+    fn get_aabb(&self) -> AABoundingBox {
+        self.aabb.clone()   
     }
 }
 
@@ -139,6 +199,11 @@ impl Hittable for Sphere {
 
     fn num_objects(&self) -> u32 {
         1
+    }
+
+    fn get_aabb(&self) -> AABoundingBox {
+        AABoundingBox { min: self.center - Vec3f::new(self.radius, self.radius, self.radius),
+                         max: self.center + Vec3f::new(self.radius, self.radius, self.radius) }
     }
 }
 
@@ -201,6 +266,11 @@ impl Hittable for Plane {
 
     fn num_objects(&self) -> u32 {
         1
+    }
+
+    fn get_aabb(&self) -> AABoundingBox {
+        AABoundingBox { min: Vec3f::new(-f32::INFINITY, -f32::INFINITY, -f32::INFINITY),
+                        max: Vec3f::new(f32::INFINITY, f32::INFINITY, f32::INFINITY) }
     }
 }
 
@@ -343,6 +413,17 @@ impl Hittable for Parallelogram {
         }
     }
 
+    fn get_aabb(&self) -> AABoundingBox {
+        // Project the projected points back onto the parallelogram normal, offset them by the correct
+        // distance along the normal and send them to the aabb
+        let mut aabb: AABoundingBox = AABoundingBox::default();
+        for p in self.projected_bounds.iter() {
+            let point = p.proj_plane(&self.normal) + self.normal * self.d;
+            aabb.expand(&point);
+        }
+        aabb
+    }
+
     fn num_objects(&self) -> u32 {
         1
     }
@@ -357,6 +438,10 @@ pub struct Parallelepiped {
 impl Hittable for Parallelepiped {
     fn num_objects(&self) -> u32 {
         6
+    }
+
+    fn get_aabb(&self) -> AABoundingBox {
+        self.list.get_aabb()
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
