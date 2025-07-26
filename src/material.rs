@@ -5,16 +5,39 @@ use crate::util;
 use crate::{ray::Ray, vec3::Color};
 use crate::hittable::HitRecord;
 
-pub trait Material {
+pub trait MaterialTrait {
     // Returns None if the ray was absorbed.
     // Else, returns a new (scattered) ray and color attenuation
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>);
 }
 
-#[derive(Default)]
+#[derive(Clone)]
+pub enum Material {
+    MatNormalDebug(MatNormalDebug),
+    MatFaceDebug(MatFaceDebug),
+    MatLambertDiffuse(MatLambertDiffuse),
+    MatPrincipled(MatPrincipled),
+    MatGlass(MatGlass),
+    MatEmission(MatEmission),
+}
+
+impl MaterialTrait for Material {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+        match self {
+            Material::MatEmission(mat) => mat.scatter(ray_in, hit),
+            Material::MatNormalDebug(mat) => mat.scatter(ray_in, hit),
+            Material::MatFaceDebug(mat) => mat.scatter(ray_in, hit),
+            Material::MatLambertDiffuse(mat) => mat.scatter(ray_in, hit),
+            Material::MatPrincipled(mat) => mat.scatter(ray_in, hit),
+            Material::MatGlass(mat) => mat.scatter(ray_in, hit),
+        }
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct MatNormalDebug {}
 
-impl Material for MatNormalDebug {
+impl MaterialTrait for MatNormalDebug {
     #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         let color = if hit.front_face {
@@ -29,15 +52,15 @@ impl Material for MatNormalDebug {
 }
 
 impl MatNormalDebug {
-    pub fn new() -> Rc<dyn Material> {
-        Rc::new(MatNormalDebug::default())
+    pub fn new() -> Material {
+        Material::MatNormalDebug(MatNormalDebug::default())
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MatFaceDebug {}
 
-impl Material for MatFaceDebug {
+impl MaterialTrait for MatFaceDebug {
     #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         let color = if hit.front_face {
@@ -51,45 +74,24 @@ impl Material for MatFaceDebug {
 }
 
 impl MatFaceDebug {
-    pub fn new() -> Rc<dyn Material> {
-        Rc::new(MatFaceDebug::default())
+    pub fn new() -> Material {
+        Material::MatFaceDebug(MatFaceDebug::default())
     }
 }
 
-#[derive(Default)]
-pub struct MatPoorDiffuse {
-    albedo: Color,
-}
-
-impl MatPoorDiffuse {
-    pub fn new(c: Color) -> Rc<dyn Material> {
-        Rc::new(MatPoorDiffuse { albedo: c })
-    }
-}
-
-impl Material for MatPoorDiffuse {
-    #[allow(unused_variables)]
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        let new_dir = util::rand_unit_vec_on_hemisphere(&hit.normal);
-        let new_ray = Ray::new(&hit.point, &new_dir.normalize());
-
-        (Some(new_ray), Some(self.albedo.clone()))
-    }
-}
-
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct MatLambertDiffuse {
     albedo: Color,
     reflectance: f32,
 }
 
 impl MatLambertDiffuse {
-    pub fn new(c: Color, refl: f32) -> Rc<dyn Material> {
-        Rc::new(MatLambertDiffuse { albedo: c, reflectance: refl })
+    pub fn new(c: Color, refl: f32) -> Material {
+        Material::MatLambertDiffuse(MatLambertDiffuse { albedo: c, reflectance: refl })
     }
 }
 
-impl Material for MatLambertDiffuse {
+impl MaterialTrait for MatLambertDiffuse {
     #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         // Find the new scatter dir :)
@@ -124,33 +126,14 @@ fn schlick_approx(cos_theta: f32, ior: f32) -> f32 {
     r0 + (1.0 - r0) * fac5
 }
 
-pub struct MatMetal {
-    albedo: Color,
-    fuzz_fac: f32,
-}
-
-impl Material for MatMetal {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        let fuzz_vec = util::rand_unit_vec() * self.fuzz_fac;
-        let reflect_vec = vec_reflect(&ray_in.dir, &hit.normal);
-        let new_ray = Ray::new(&hit.point, &(fuzz_vec + reflect_vec));
-        (Some(new_ray), Some(self.albedo))
-    }
-}
-
-impl MatMetal {
-    pub fn new(c: Color, fuzz: f32) -> Rc<dyn Material> {
-        Rc::new(MatMetal{albedo: c, fuzz_fac: fuzz})
-    }
-}
-
+#[derive(Default, Clone)]
 pub struct MatPrincipled {
     albedo: Color,
     reflectiveness: f32,
     gloss_fuzz: f32,
 }
 
-impl Material for MatPrincipled {
+impl MaterialTrait for MatPrincipled {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         if util::rand_bool(self.reflectiveness) { 
             // Either we do a (fuzzy) reflection...
@@ -174,20 +157,22 @@ impl Material for MatPrincipled {
 }
 
 impl MatPrincipled {
-    pub fn new(c: Color, refl: f32, fuzz: f32) -> Rc<dyn Material> {
-        Rc::new(MatPrincipled{
-                albedo: c, 
-                reflectiveness: num::clamp(refl, 0.0, 1.0),
-                gloss_fuzz: num::clamp(fuzz, 0.0, 1.0), })
+    pub fn new(c: Color, refl: f32, fuzz: f32) -> Material {
+        Material::MatPrincipled(MatPrincipled {
+            albedo: c,
+            reflectiveness: num::clamp(refl, 0.0, 1.0),
+            gloss_fuzz: num::clamp(fuzz, 0.0, 1.0),
+        })
     }
 }
 
+#[derive(Default, Clone)]
 pub struct MatEmission {
     color: Color,
     strength: f32,
 }
 
-impl Material for MatEmission {
+impl MaterialTrait for MatEmission {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         // This material simply absorbs the ray and gives back a solid color of,
         // potentially, quite high brightness.
@@ -197,19 +182,21 @@ impl Material for MatEmission {
 }
 
 impl MatEmission {
-      pub fn new(c: Color, strength: f32) -> Rc<dyn Material> {
-        Rc::new(MatEmission{
-                color: c, 
-                strength: strength, })
+    pub fn new(c: Color, strength: f32) -> Material {
+        Material::MatEmission(MatEmission {
+            color: c,
+            strength,
+        })
     }
 }
 
+#[derive(Default, Clone)]
 pub struct MatGlass {
     color: Color,
     ior: f32,
 }
 
-impl Material for MatGlass {
+impl MaterialTrait for MatGlass {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         let unit_direction = ray_in.dir.normalize();
 
@@ -238,8 +225,8 @@ impl Material for MatGlass {
 }
 
 impl MatGlass {
-    pub fn new(c: Color, ior: f32) -> Rc<dyn Material> {
-        Rc::new(MatGlass{
+    pub fn new(c: Color, ior: f32) -> Material {
+        Material::MatGlass(MatGlass{
             color: c,
             ior: ior,
         })

@@ -1,4 +1,5 @@
-use crate::hittable::Hittable;
+use crate::hittable::HittableTrait;
+use crate::material::MaterialTrait;
 use crate::ray::Ray;
 use crate::vec3::{Color, Pixel, Vec3f};
 use crate::util::{self, Interval};
@@ -189,7 +190,7 @@ impl Camera {
         lerped_color * BRIGHTNESS
     }
 
-    fn ray_color(&self, ray: &Ray, world: &dyn Hittable, bounce: u32) -> Color {
+    fn ray_color(&self, ray: &Ray, world: &dyn HittableTrait, bounce: u32) -> Color {
         static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
 
         // Abort if max bounce is reached.
@@ -225,7 +226,7 @@ impl Camera {
         }
     }
 
-    fn render_region(&self, world: &dyn Hittable, start_line: u32, num_lines: u32) -> Vec<Pixel> {
+    fn render_region(&self, world: &dyn HittableTrait, start_line: u32, num_lines: u32) -> Vec<Pixel> {
         let mut pixels: Vec<Pixel> = Vec::new();
 
         let offset_range = 1.0 / self.settings.image_height as f32;
@@ -266,7 +267,7 @@ impl Camera {
         pixels
     }
 
-    pub fn render(&self, world: &dyn Hittable) -> RenderResult {
+    pub fn render(&self, world: &dyn HittableTrait) -> RenderResult {
         let start = std::time::Instant::now();
         let pixels = self.render_region(world, 0, self.settings.image_height);
         let duration = start.elapsed();

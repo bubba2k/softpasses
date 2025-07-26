@@ -1,4 +1,4 @@
-use crate::material::{Material};
+use crate::material::{MaterialTrait, Material};
 use crate::ray::{Ray};
 use crate::vec3::{self, Vec3f, CoordinatePlane};
 use crate::util::Interval;
@@ -6,17 +6,17 @@ use crate::util::Interval;
 use core::f32;
 use std::rc::Rc;
 
-pub struct HitRecord {
+pub struct HitRecord<'a> {
     pub point: Vec3f,
     pub normal: Vec3f,
     pub num_bounces: u32, // How many times the ray has bounced so far
-    pub material: Rc<dyn Material>,
+    pub material: &'a Material,
     pub t: f32,
     pub front_face: bool, // True if ray hit the front of a face/surface. False if ray is on inside
 }
 
-impl HitRecord {
-    pub fn new(ray: &Ray, t_hit: f32, point_hit: Vec3f, num_bounces: u32, obj_mat: Rc<dyn Material>, obj_normal: Vec3f) -> Self {
+impl<'a> HitRecord<'a> {
+    pub fn new(ray: &Ray, t_hit: f32, point_hit: Vec3f, num_bounces: u32, obj_mat: &'a Material, obj_normal: Vec3f) -> Self {
         // Check whether we hit the inside or outside
         if ray.dir.dot(&obj_normal) > 0.0 {
             // Hit the "inside" of object. Flip the normal!
@@ -24,7 +24,7 @@ impl HitRecord {
                 point: point_hit,
                 normal: -obj_normal,
                 material: obj_mat,
-                num_bounces: num_bounces,
+                num_bounces,
                 t: t_hit,
                 front_face: false,
             }
@@ -42,7 +42,7 @@ impl HitRecord {
     }
 }
 
-pub trait Hittable {
+pub trait HittableTrait {
     // The meat and bones. Detect hits from rays.
     // num_bounces: How many time this ray has bounced already.
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord>;
@@ -73,6 +73,42 @@ fn hit_sphere(ray: &Ray, center: &Vec3f, radius: f32) -> Option<f32> {
     } else {
         // No hit, nothing
         None
+    }
+}
+
+pub enum Hittable {
+    Sphere(Sphere),
+    Parallelogram(Parallelogram),
+    Parallelepiped(Parallelepiped),
+    Plane(Plane),
+}
+
+impl HittableTrait for Hittable {
+    fn get_aabb(&self) -> AABoundingBox {
+        match self {
+            Hittable::Sphere(sphere) => sphere.get_aabb(),
+            Hittable::Parallelepiped(parallelepiped) => parallelepiped.get_aabb(),
+            Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
+            Hittable::Plane(plane) => plane.get_aabb(),
+        }
+    }
+
+    fn num_objects(&self) -> u32 {
+        match self {
+            Hittable::Sphere(sphere) => sphere.num_objects(),
+            Hittable::Parallelepiped(parallelepiped) => parallelepiped.num_objects(),
+            Hittable::Parallelogram(parallelogram) => parallelogram.num_objects(),
+            Hittable::Plane(plane) => plane.num_objects(),
+        }   
+    }
+
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+         match self {
+            Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval, num_bounces),
+            Hittable::Parallelepiped(parallelepiped) => parallelepiped.try_hit(ray, t_interval, num_bounces),
+            Hittable::Parallelogram(parallelogram) => parallelogram.try_hit(ray, t_interval, num_bounces),
+            Hittable::Plane(plane) => plane.try_hit(ray, t_interval, num_bounces),
+        }  
     }
 }
 
@@ -125,7 +161,7 @@ impl AABoundingBox {
 
 #[derive(Default)]
 pub struct HittableList {
-    list: Vec<Rc<dyn Hittable>>,
+    list: Vec<Hittable>,
     aabb: AABoundingBox,
 }
 
@@ -134,14 +170,14 @@ impl HittableList {
         self.list.clear();
     }
 
-    pub fn push(&mut self, hittable: Rc<dyn Hittable>) {
+    pub fn push(&mut self, hittable: Hittable) {
         self.aabb.expand(&hittable.get_aabb().max);
         self.aabb.expand(&hittable.get_aabb().min);
         self.list.push(hittable);
     }
 }
 
-impl Hittable for HittableList {
+impl HittableTrait for HittableList {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if the ray does not hit this lists bounding box (TODO: This seems to worsen performance,
         // so it is turned off for now.)
@@ -166,12 +202,12 @@ impl Hittable for HittableList {
 pub struct Sphere {
     pub center: Vec3f,
     pub radius: f32,
-    pub material: Rc<dyn Material>,
+    pub material: Material,
 }
 
 impl Sphere {
-    pub fn new(c: Vec3f, r: f32, material: Rc<dyn Material>) -> Rc<Self> {
-        Rc::new(Sphere {
+    pub fn new(c: Vec3f, r: f32, material: Material) -> Hittable {
+        Hittable::Sphere(Sphere {
             center: c,
             radius: r,
             material: material,
@@ -179,7 +215,7 @@ impl Sphere {
     }
 }
 
-impl Hittable for Sphere {
+impl HittableTrait for Sphere {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
             if t_interval.contains(t_hit) {
@@ -187,7 +223,7 @@ impl Hittable for Sphere {
                 let sphere_normal = (point_hit - self.center) / self.radius;
 
                 Some(HitRecord::new(ray, t_hit, point_hit, 
-                                num_bounces, self.material.clone(), 
+                                num_bounces, &self.material, 
                             sphere_normal))       
             } else {
                 None
@@ -211,19 +247,19 @@ pub struct Plane {
     // The plane in HNF
     normal: Vec3f,
     d: f32,    // Distance from origin
-    material: Rc<dyn Material>,
+    material: Material,
 }
 
 impl Plane {
-    pub fn new(normal: Vec3f, d: f32, mat: Rc::<dyn Material>) -> Rc<Self> {
-        Rc::new(Plane {
+    pub fn new(normal: Vec3f, d: f32, mat: Material) -> Hittable {
+        Hittable::Plane(Plane {
             normal: normal,
             d: d,
             material: mat, 
        })
     }
 
-    pub fn from_points(botleft: Vec3f, topleft: Vec3f, botright: Vec3f, mat: Rc<dyn Material>) -> Rc<Self> {
+    pub fn from_points(botleft: Vec3f, topleft: Vec3f, botright: Vec3f, mat: Material) -> Self {
         let right = botright - botleft;
         let up = topleft - botleft;
         
@@ -238,15 +274,15 @@ impl Plane {
             -distance
         };
 
-        Rc::new(Plane {
+        Plane {
             material: mat,
             normal: normal,
             d: signed_distance,
-        })
+        }
     }
 }
 
-impl Hittable for Plane {
+impl HittableTrait for Plane {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(&ray.dir) == 0.0 {
@@ -260,7 +296,7 @@ impl Hittable for Plane {
         } else {
             let p_intersect = ray.at(t_intersect);
 
-            Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, self.material.clone(), self.normal))
+            Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, &self.material, self.normal))
         }
     }
 
@@ -285,11 +321,11 @@ pub struct Parallelogram {
     // The coordinate plane to project intersection point onto for bounds checking
     projection_plane: vec3::CoordinatePlane,
 
-    material: Rc<dyn Material>,
+    material: Material,
 }
 
 impl Parallelogram {
-    pub fn from_points(bottom_left: Vec3f, top_left: Vec3f, bottom_right: Vec3f, mat: Rc::<dyn Material>) -> Rc<Self> {
+    pub fn from_points(bottom_left: Vec3f, top_left: Vec3f, bottom_right: Vec3f, mat: Material) -> Hittable {
         // Together with `bottom_left`, these three letters form represent the plane in parametric form.
         let up = top_left - bottom_left;
         let right = bottom_right - bottom_left;
@@ -297,8 +333,6 @@ impl Parallelogram {
         let normal = right.cross(&up).normalize();
         let distance = (bottom_left.proj_plane(&normal) - bottom_left).length();
 
-        // The plane is in HNF, so we want the plane normal to point away from the CS origin.
-        // That means we might have to negate distance:
         let signed_distance = if normal.dot(&bottom_left) >= 0.0 {
             distance
         } else {
@@ -358,7 +392,7 @@ impl Parallelogram {
             }
         };
 
-        Rc::new(Parallelogram {
+        Hittable::Parallelogram(Parallelogram {
             normal: normal.normalize(),
             d: signed_distance,
 
@@ -370,7 +404,7 @@ impl Parallelogram {
     }   
 }
 
-impl Hittable for Parallelogram {
+impl HittableTrait for Parallelogram {
     // Checking for Ray-Rectangle intersect involves two steps:
     // 1. Finding intersect point between ray and the plane the rect lies on
     // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
@@ -406,7 +440,7 @@ impl Hittable for Parallelogram {
             };
 
             if is_left_of_all {
-                Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, self.material.clone(), self.normal))
+                Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, &self.material, self.normal))
             } else {
                 None
             }
@@ -432,10 +466,10 @@ impl Hittable for Parallelogram {
 pub struct Parallelepiped {
     // List of the 6 faces 
     list: HittableList,
-    material: Rc<dyn Material>,
+    material: Material,
 }
 
-impl Hittable for Parallelepiped {
+impl HittableTrait for Parallelepiped {
     fn num_objects(&self) -> u32 {
         6
     }
@@ -450,7 +484,7 @@ impl Hittable for Parallelepiped {
 }
 
 impl Parallelepiped {
-    pub fn new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Rc<dyn Material>) -> Rc<Self> {
+    fn _new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Material) -> Self {
         let up = back_top_left - back_bottom_left;
         let right = back_bottom_right - back_bottom_left;
         let depth = front_bottom_left - back_bottom_left;
@@ -476,16 +510,22 @@ impl Parallelepiped {
         // Right face
         list.push(Parallelogram::from_points(back_bottom_right, back_top_right, front_bottom_right, material.clone()));
 
-        Rc::new(Parallelepiped { list: list, material: material })
+        Parallelepiped { list: list, material: material }
+    }
+
+    pub fn new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Material) -> Hittable {
+        Hittable::Parallelepiped(Self::_new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material))
     }
  
-    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32, material: Rc<dyn Material>) -> Rc<Self> {
+    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32, material: Material) -> Hittable {
         let depth_dir = up_dir.cross(&right_dir).normalize();
 
         let back_bottom_left = front_bottom_left + depth_dir * size;
         let back_bottom_right = back_bottom_left + right_dir.normalize() * size;
         let back_top_left = back_bottom_left + up_dir.normalize() * size;
 
-        Parallelepiped::new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material)
+
+        let p = Parallelepiped::_new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material);
+        Hittable::Parallelepiped(p)
     }
 }
