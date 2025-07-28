@@ -82,6 +82,7 @@ impl<T: Copy + Sub<Output = T>> Sub<T> for Vec3<T> {
     }
 }
 
+// Mul operator is the component-wise product
 impl<T: Mul<Output = T> + Copy> Mul for Vec3<T> {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self::Output {

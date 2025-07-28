@@ -1,10 +1,9 @@
-use crate::material::{MaterialTrait, Material};
+use crate::material::Material;
 use crate::ray::{Ray};
 use crate::vec3::{self, Vec3f, CoordinatePlane};
 use crate::util::Interval;
 
 use core::f32;
-use std::rc::Rc;
 
 pub struct HitRecord<'a> {
     pub point: Vec3f,

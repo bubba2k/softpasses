@@ -1,4 +1,6 @@
-use crate::hittable::HittableTrait;
+use num::range;
+
+use crate::hittable::{HittableList, HittableTrait};
 use crate::material::MaterialTrait;
 use crate::ray::Ray;
 use crate::vec3::{Color, Pixel, Vec3f};
@@ -181,7 +183,7 @@ impl Camera {
         // color simply by what direction we are looking in.
 
         // For now, it is a simple gradient along the y axis.
-        const BRIGHTNESS: f32 = 0.0;
+        const BRIGHTNESS: f32 = 1.0;
         const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
         const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
 
@@ -190,16 +192,14 @@ impl Camera {
         lerped_color * BRIGHTNESS
     }
 
-    fn ray_color(&self, ray: &Ray, world: &dyn HittableTrait, bounce: u32) -> Color {
+    fn ray_color(&self, ray: &Ray, world: &HittableList, bounce: u32) -> Color {
         static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
 
         // Abort if max bounce is reached.
-        if bounce == self.settings.max_bounces { return COLOR_BLACK }
+        if bounce == self.settings.max_bounces { return COLOR_BLACK; }
 
         // Fire the ray. See if it hits anything.
-        if let Some(hit) = world.try_hit(ray, 
-                self.settings.ray_limits,
-                            bounce) {
+        if let Some(hit) = world.try_hit(ray, self.settings.ray_limits, bounce) {
             match hit.material.scatter(ray, &hit) {
                 (Some(scatter_ray), Some(color_att)) => {
                     // Fire the reflected/scattered ray we got from the material and surface information.
@@ -212,7 +212,7 @@ impl Camera {
                     self.ray_color(&scatter_ray, world, bounce + 1)
                 },
                 (None, Some(color_att)) => {
-                    // Ray absorbed, just return the color.
+                    // Ray absorbed, just return the attenuation color.
                     color_att
                 },
                 (None, None) => {
@@ -226,7 +226,51 @@ impl Camera {
         }
     }
 
-    fn render_region(&self, world: &dyn HittableTrait, start_line: u32, num_lines: u32) -> Vec<Pixel> {
+    fn ray_color_it(&self, ray: &Ray, world: &HittableList, bounce: u32) -> Color {
+        static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
+
+        let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
+        let mut current_ray: Ray = ray.clone();
+        let mut bounce_counter = 0;
+        loop {
+            if bounce_counter == self.settings.max_bounces {
+                // If max bounces where reached, the ray never hit a light source
+                return COLOR_BLACK;
+            }        
+            // Fire the ray. See if it hits anything.
+            if let Some(hit) = world.try_hit(&current_ray, self.settings.ray_limits, bounce_counter) {
+                match hit.material.scatter(&current_ray, &hit) {
+                    (Some(scatter_ray), Some(color_att)) => {
+                        // Fire the reflected/scattered ray we got from the material and surface information.
+                        // Attenuate with the color attenuation applied by the material.
+                        current_ray = scatter_ray;
+                        ray_color = ray_color * color_att;
+                    },
+                    (Some(scatter_ray), None) => {
+                        // The ray was reflected, but the color not attenuated.
+                        // Simply shoot the new, attenuated ray.
+                        current_ray = scatter_ray;
+                    },
+                    (None, Some(color_att)) => {
+                        // Ray absorbed. Do one last attenuation and return.
+                        return ray_color * color_att;
+                    },
+                    (None, None) => {
+                        // The ray was absorbed and no attenuation color was given.
+                        // This should not happen, but we have to handle the case. Assume a black hole.
+                        return COLOR_BLACK;
+                    }
+                }
+            } else {
+                // If the ray did not hit objects, we assume it hit the background / sky.
+                return ray_color * self.background_color(current_ray.dir);
+            }
+
+            bounce_counter = bounce_counter + 1;
+        }
+    }
+
+    fn render_region(&self, world: &HittableList, start_line: u32, num_lines: u32) -> Vec<Pixel> {
         let mut pixels: Vec<Pixel> = Vec::new();
 
         let offset_range = 1.0 / self.settings.image_height as f32;
@@ -256,7 +300,7 @@ impl Camera {
 
                     let ray = self.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
-                    color += self.ray_color(&ray, world, 0) * 
+                    color += self.ray_color_it(&ray, world, 0) * 
                                             (1.0 / self.settings.samples_per_pixel as f32);
                 }
 
@@ -267,7 +311,7 @@ impl Camera {
         pixels
     }
 
-    pub fn render(&self, world: &dyn HittableTrait) -> RenderResult {
+    pub fn render(&self, world: &HittableList) -> RenderResult {
         let start = std::time::Instant::now();
         let pixels = self.render_region(world, 0, self.settings.image_height);
         let duration = start.elapsed();

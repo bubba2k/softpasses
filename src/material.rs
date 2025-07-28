@@ -19,6 +19,7 @@ pub enum Material {
     MatPrincipled(MatPrincipled),
     MatGlass(MatGlass),
     MatEmission(MatEmission),
+    MatBounceDebug(MatBounceDebug),
 }
 
 impl MaterialTrait for Material {
@@ -30,6 +31,7 @@ impl MaterialTrait for Material {
             Material::MatLambertDiffuse(mat) => mat.scatter(ray_in, hit),
             Material::MatPrincipled(mat) => mat.scatter(ray_in, hit),
             Material::MatGlass(mat) => mat.scatter(ray_in, hit),
+            Material::MatBounceDebug(mat) => mat.scatter(ray_in, hit),
         }
     }
 }
@@ -76,6 +78,33 @@ impl MaterialTrait for MatFaceDebug {
 impl MatFaceDebug {
     pub fn new() -> Material {
         Material::MatFaceDebug(MatFaceDebug::default())
+    }
+}
+
+#[derive(Clone)]
+pub struct MatBounceDebug {
+    limit: u32,
+}
+
+impl MatBounceDebug {
+    pub fn new(limit: u32) -> Material {
+        Material::MatBounceDebug(MatBounceDebug{ limit: limit})
+    }
+}
+
+impl MaterialTrait for MatBounceDebug {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+        static COLOR_RED:  Color = Vec3f::new(1.0, 0.0, 0.0);
+        static COLOR_LOW:  Color = Vec3f::new(0.4, 0.4, 0.4);
+        static COLOR_HIGH: Color = Vec3f::new(1.0, 1.0, 1.0);
+        let color = if hit.num_bounces >= self.limit {
+            COLOR_RED
+        } else {   
+            let t = hit.num_bounces as f32 / self.limit as f32;
+            COLOR_LOW.lerp(&COLOR_HIGH, t)
+        };
+
+        (None, Some(color))
     }
 }
 
