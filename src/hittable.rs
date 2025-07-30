@@ -1,6 +1,6 @@
 use crate::material::Material;
 use crate::ray::{Ray};
-use crate::vec3::{self, Vec3f, CoordinatePlane};
+use crate::vector::{self, Vec3f, CoordinatePlane};
 use crate::util::Interval;
 
 use core::f32;
@@ -318,7 +318,7 @@ pub struct Parallelogram {
     projected_bounds: [Vec3f;4],
 
     // The coordinate plane to project intersection point onto for bounds checking
-    projection_plane: vec3::CoordinatePlane,
+    projection_plane: vector::CoordinatePlane,
 
     material: Material,
 }
@@ -352,7 +352,7 @@ impl Parallelogram {
                 let projected_topleft = top_left;
                 let projected_topright = bottom_right + up;
 
-                if vec3::PLANE_XY.dot(&normal) > 0.0 {
+                if vector::PLANE_XY.dot(&normal) > 0.0 {
                     [projected_botleft, projected_botright, projected_topright, projected_topleft]
 
                 } else {
@@ -368,7 +368,7 @@ impl Parallelogram {
                 let top_right = bottom_right + up;
                 let projected_topright = Vec3f::new(top_right.x(), top_right.z(), 0.0);
 
-                if vec3::PLANE_XZ.dot(&normal) > 0.0 {
+                if vector::PLANE_XZ.dot(&normal) > 0.0 {
                     [projected_topleft, projected_topright, projected_botright, projected_botleft]
                 } else {
                     [projected_botleft, projected_botright, projected_topright, projected_topleft]
@@ -382,7 +382,7 @@ impl Parallelogram {
                 let top_right = bottom_right + up;
                 let projected_topright = Vec3f::new(top_right.y(), top_right.z(), 0.0);
 
-                if vec3::PLANE_YZ.dot(&normal) > 0.0 {
+                if vector::PLANE_YZ.dot(&normal) > 0.0 {
                     [projected_botleft, projected_botright, projected_topright, projected_topleft]
 
                 } else {
@@ -435,7 +435,7 @@ impl HittableTrait for Parallelogram {
             for i in 0..4 {
                 let a = &self.projected_bounds[i];
                 let b = &self.projected_bounds[(i + 1) % 4];
-                if !vec3::point_left_of_edge(&projected_intersect_point, a, b) { is_left_of_all = false; }
+                if !vector::point_left_of_edge(&projected_intersect_point, a, b) { is_left_of_all = false; }
             };
 
             if is_left_of_all {

@@ -1,4 +1,4 @@
-use super::vec3::Vec3;
+use super::vector::Vec3;
 
 pub fn ppm_header(width: u32, height: u32) -> String {
     format!("P3\n{} {}\n255\n", width, height)

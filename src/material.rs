@@ -3,9 +3,9 @@ use std::rc::Rc;
 use rand::distr::Distribution;
 use rand::Rng;
 
-use crate::vec3::Vec3f;
+use crate::vector::Vec3f;
 use crate::util;
-use crate::{ray::Ray, vec3::Color};
+use crate::{ray::Ray, vector::Color};
 use crate::hittable::HitRecord;
 
 pub trait MaterialTrait {
@@ -176,8 +176,8 @@ impl MaterialTrait for MatLambertDiffuse {
     }
 }
 
-fn vec_reflect(v: &Vec3f, n: &Vec3f) -> Vec3f {
-    (*v - (*n * 2.0 * v.dot(n))).normalize()
+fn vec_reflect(v_norm: &Vec3f, n_norm: &Vec3f) -> Vec3f {
+    (*v_norm - (*n_norm * 2.0 * v_norm.dot(n_norm)))
 }
 
 fn vec_refract(v: &Vec3f, n: &Vec3f, etai_over_etat: f32) -> Vec3f {
@@ -209,11 +209,11 @@ impl MaterialTrait for MatPrincipled {
             // Either we do a (fuzzy) reflection...
             let fuzz_vec = util::rand_unit_vec() * self.gloss_fuzz;
             let reflect_vec = vec_reflect(&ray_in.dir, &hit.normal);
-            let new_ray = Ray::new(&hit.point, &(fuzz_vec + reflect_vec));
+            let new_ray = Ray::new(&hit.point, &(fuzz_vec + reflect_vec).normalize());
             (Some(new_ray), Some(self.albedo))
         } else {
             // Or do old school lambertian diffuse
-            let new_dir = util::rand_unit_vec() + hit.normal;
+            let new_dir = (util::rand_unit_vec() + hit.normal).normalize();
             // Make sure to discard those pesky too tiny vectors.
             if !new_dir.near_zero() {
                 let new_ray = Ray::new(&hit.point, &new_dir);
@@ -287,7 +287,7 @@ pub struct MatGlass {
 
 impl MaterialTrait for MatGlass {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        let unit_direction = ray_in.dir.normalize();
+        let unit_direction = ray_in.dir;
 
         // Compute the relative index of refraction (ior) depending on whether the ray is entering or exiting the material.
         let ior_rel = if hit.front_face { 1.0 / self.ior } else { self.ior };

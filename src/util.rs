@@ -1,5 +1,5 @@
-use std::f32;
-use crate::vec3::Vec3f;
+use std::{f32, fmt::LowerHex};
+use crate::vector::Vec3f;
 
 #[derive(Clone, Copy)]
 pub struct Interval {
@@ -40,12 +40,7 @@ pub fn linear_to_gamma(linear_component: f32) -> f32 {
 }
 
 pub fn rand_range_f(low: f32, high: f32) -> f32 {
-    let t = rand::random::<u16>() as f32 / u16::MAX as f32;
-    low + (high - low) * t
-}
-
-pub fn rand_vec3() -> Vec3f {
-    Vec3f::new(rand::random::<f32>(), rand::random::<f32>(), rand::random::<f32>())
+    fastrand::f32() * (high - low) + low
 }
 
 pub fn rand_vec3_range(min: f32, max: f32) -> Vec3f {

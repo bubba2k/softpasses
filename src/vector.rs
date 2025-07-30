@@ -9,6 +9,10 @@ pub struct Vec3<T> {
     v: [T;3]
 }
 
+pub fn vec3<T: num::Num>(x: T, y: T, z: T) -> Vec3<T> {
+    Vec3::new(x, y, z)
+}
+
 pub const PLANE_XY: Vec3f = Vec3f::new(0.0, 0.0, 1.0);
 pub const PLANE_XZ: Vec3f = Vec3f::new(0.0, 1.0, 0.0);
 pub const PLANE_YZ: Vec3f = Vec3f::new(1.0, 0.0, 0.0);
@@ -144,11 +148,13 @@ impl<T: Default> Default for Vec3<T> {
     }
 }
 
-impl<T: num::Num + Copy + Mul<Output = T> + Add<Output = T> + Sub<Output = T>> Vec3<T> {
+impl<T> Vec3<T> {
     pub const fn new(x: T, y: T, z: T) -> Self {
         Self { v: [x, y, z] }
     }
+}
 
+impl<T: num::Num + Copy + Mul<Output = T> + Add<Output = T> + Sub<Output = T>> Vec3<T> {
     // Dot product
     pub fn dot(&self, rhs: &Vec3<T>) -> T {
         self.v[0] * rhs.v[0] + self.v[1] * rhs.v[1]+ self.v[2] * rhs.v[2]
