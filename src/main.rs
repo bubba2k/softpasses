@@ -9,29 +9,49 @@ mod hittable;
 mod util;
 mod material;
 
+use std::f32::consts::PI;
+
 use vec3::{Vec3f, Color};
 use camera::{Camera};
 use hittable::{HittableList, Sphere, Plane, Parallelogram};
-use material::{MatLambertDiffuse, MatFaceDebug, MatGlass, MatNormalDebug, MatPrincipled};
+use material::{MatLambertDiffuse, MatFaceDebug, MatGlass, MatNormalDebug, MatPrincipled, MaterialTrait};
 use util::Interval;
 
-use crate::{hittable::Parallelepiped, material::MatEmission, vec3::CoordinatePlane};
+use crate::{hittable::{Hittable, Parallelepiped}, material::MatEmission, vec3::CoordinatePlane};
+
+// Scatter spheres on a plane
+fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
+    for i in 0..count {
+        // Make it so the spheres "sit" on the given plane height
+        let radius = util::rand_range_f(sphere_radius.0, sphere_radius.1);
+        let height = height + radius;
+
+        let angle = util::rand_range_f(0.0, 2.0 * PI);
+        let distance = util::rand_range_f(0.0, 1.0).sqrt() * scatter_radius;
+        let (x, y) = (f32::cos(angle) * distance, f32::sin(angle) * distance); 
+        let center = Vec3f::new(x, height, y);
+        let material = material::Material::random_instance();
+        let sphere = Sphere::new(center, radius, material);
+
+        world.push(sphere);
+    }
+}
 
 fn main() {
-    let width: u32  = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32  = 1280 / 6;
+    let height: u32 = 1024 / 6;
     let aspect_ratio: f32 = width as f32 / height as f32;
 
-    let pose = camera::Pose::look_at(Vec3f::new(-2.0, 0.9, 1.2), 
-                                            Vec3f::new(0.4, 0.6, -1.0));
+    let pose = camera::Pose::look_at(Vec3f::new(0.0, 15.0, 0.1), 
+                                            Vec3f::new(0.0, 0.0, -0.1));
     let lens = camera::Lens::new(
-        35,
-        20, 
+        15,
+        35, 
         aspect_ratio,
         3.44,
     0.0);
     let settings = camera::RenderSettings {
-        samples_per_pixel: 100,
+        samples_per_pixel: 20,
         max_bounces: 8,
         image_width: width,
         image_height: height,
@@ -39,30 +59,13 @@ fn main() {
     };
     let camera = Camera::new(pose, lens, settings);
 
-    let mat_facedebug = MatFaceDebug::new();
-    let mat_lamyellow = MatLambertDiffuse::new(Color::new(0.75, 0.5, 0.1), 1.0);
-    let mat_lamred = MatLambertDiffuse::new(Color::new(0.95, 0.1, 0.1), 1.0);
-    let matp_floor = MatLambertDiffuse::new(Color::new(0.2, 0.8, 0.3), 0.8);
-    let matp_brushedmet = MatPrincipled::new(Color::new(0.8, 0.9, 0.9), 0.9, 0.09);
-    let mat_glass = MatGlass::new(Color::new(1.0, 1.0, 1.0), 1.5);
-    let mat_glass_inside = MatGlass::new(Color::new(1.0, 1.0, 1.0), 1.0 / 1.5);
-    let mat_emissive = MatEmission::new(Color::new(0.2, 0.2, 1.0), 1.0);
-    let mat_normals = MatNormalDebug::new();
-
+    // Scene setup
+    let mat_floor = MatLambertDiffuse::new(Vec3f::new(0.2, 0.9, 0.2), 1.0);
+    let floor = Plane::new(Vec3f::new(0.0, 1.0, 0.0), 0.0, mat_floor);
     let mut world: HittableList = HittableList::default();
+    world.push(floor);
+    scatter_spheres(&mut world, 200, 0.0, 2.0, (0.05, 0.1));
 
-    let cube = Parallelepiped::new_cube(
-        Vec3f::new(-2.0, -0.5, -1.6),
-    Vec3f::new(1.0, 0.0, -0.2), vec3::PLANE_XZ, 8.3, mat_lamyellow.clone());
-
-    // world.push(Sphere::new(Vec3f::new(-3.0, 0.9, 2.7), 1.2, mat_emissive.clone()));
-    world.push(Sphere::new(Vec3f::new(3.0, 0.7, 0.5), 1.2, mat_lamred.clone()));
-    world.push(Sphere::new(Vec3f::new(0.0, 0.0, -1.2), 0.5, mat_lamred));
-    world.push(Sphere::new(Vec3f::new(-1.0, 0.0, -1.0), 0.5, mat_glass));
-    world.push(Sphere::new(Vec3f::new(-1.0, 0.0, -1.0), 0.4, mat_glass_inside));
-    world.push(Sphere::new(Vec3f::new( 1.0, 0.0, -1.0), 0.5, matp_brushedmet));
-    world.push(Plane::new(Vec3f::new(0.0, 1.0, 0.0), -0.5, matp_floor));
-    world.push(cube);
 
     let render_result = camera.render(&world);
 
