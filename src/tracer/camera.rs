@@ -6,7 +6,6 @@ use crate::math::util::{self, Interval};
 use core::f32;
 use std::fmt::Display;
 use std::{thread, vec};
-use std::time::Instant;
 
 #[derive(Clone)]
 // A viewport describes the focus plane of a camera.
@@ -35,6 +34,7 @@ impl Viewport {
         }
     }
 
+    // Shoot a ray at the given uv of the viewport from a point origin (which is presumably the camera position).
     pub fn ray_at_uv(&self, u: f32, v: f32, origin: Vec3f) -> Ray {
         let target = self.topleft + self.viewright * u * self.width 
                    + self.viewdown * v * self.height;
@@ -59,22 +59,6 @@ pub struct Lens {
 }
 
 impl Lens {
-    /*  Remember: afov = 2 * atan(h / 2f) where h = sensor height
-    pub fn from_fov(afov_degrees: f32, aspect_ratio: f32) -> Self {
-        // Let horizontal sensor size be a sensible 0.35mm here.
-        let sensor_width = 0.035;
-        let h = 0.035 / aspect_ratio;
-        let afov_rad = afov_degrees.to_degrees();
-        let focal_length = h / (2.0 * f32::tan(afov_rad / 2.0));
-
-        Lens {
-            focal_length: focal_length,
-            sensor_width: sensor_width,
-            afov_rad: afov_rad,
-            aspect_ratio: aspect_ratio,
-        }
-    } */
-
     pub fn new(sensor_width_mm: u32, focal_length_mm: u32, aspect_ratio: f32, focal_distance: f32, dof: f32) -> Self {
         let sensor_width = sensor_width_mm as f32 / 1000.0;
         let focal_length = focal_length_mm as f32 / 1000.0;
@@ -170,15 +154,6 @@ impl Camera {
         let b = util::linear_to_gamma(c.b());
 
         Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
-    }
-
-    fn progress_bar(current_line: u32, total_lines: u32, begin: &Instant) {
-        let progress = (current_line as f32 / (total_lines - 1) as f32) * 100.0;
-        let seconds_per_percent = begin.elapsed().as_secs_f32() / progress;
-        let est_sec_left = (seconds_per_percent * (100.0 - progress)) as u32;
-        let minutes = est_sec_left / 60;
-        let seconds = est_sec_left % 60;
-        eprintln!("{}% | {:02}:{:02} left", progress as u32, minutes, seconds);
     }
 
     fn background_color(&self, dir: Vec3f) -> Color {
