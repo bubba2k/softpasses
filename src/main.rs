@@ -1,7 +1,7 @@
 // Allow dead code for now
 #![allow(dead_code)]
 
-mod ppm;
+mod io;
 mod vector;
 mod camera;
 mod ray;
@@ -83,6 +83,6 @@ fn main() {
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
 
-    let ppm_string = ppm::ppm_image(width, height, &render_result.pixels, comment_string);
+    let ppm_string = io::ppm::ppm_image(width, height, &render_result.pixels, comment_string);
     print!("{}", ppm_string);
 }
