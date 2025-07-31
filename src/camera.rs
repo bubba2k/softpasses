@@ -289,7 +289,7 @@ impl Camera {
 
                 let mut color: Color = Color::default();
                 // Perform multisampling here.
-                for _ in 0..cam.settings.samples_per_pixel {
+                for _ in 0..samples {
                     // The random offset into the pixel square we are considering atm (for multisampling)
                     // TODO: Make this discy instead
                     let rnd_offset_x = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
@@ -304,8 +304,7 @@ impl Camera {
 
                     let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
-                    color += cam.ray_color_it(&ray, &world, 0) * 
-                                            (1.0 / cam.settings.samples_per_pixel as f32);
+                    color += cam.ray_color_it(&ray, &world, 0) * (1.0 / samples as f32);
                 }
 
                 colors.push(color);
@@ -323,7 +322,7 @@ impl Camera {
         // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
         // Should probably have a more user friendly way to set the number of threads.
         // For now, it stays at 1, since multithreading does not yield a speedup on the ole Fujitsu Esprimo.
-        let num_threads = 1;
+        let num_threads = 2;
         let spp_per_thread = self.settings.samples_per_pixel / num_threads;
         let mut thread_handles = Vec::new();
         for _ in 0..num_threads {
@@ -343,16 +342,21 @@ impl Camera {
             images.push(image);
         }
 
+        eprintln!("Received {} images", images.len());
         // Perform weighted sum of all generated images.
         let weight = 1.0 / num_threads as f32;
         let len = images[0].len();
 
+        // Sum all the images up...
         let mut result = vec![Color::new(0.0, 0.0, 0.0); len];
-        eprintln!("Num images from threads: {}", images.len());
         for image in images {
-            for i in 0..len {
-                result[i] = result[i] + (image[i] * weight);
+            for i in 0..result.len() {
+                result[i] = result[i] + image[i];
             }
+        }
+        // ... and normalize the result
+        for i in 0..len {
+            result[i] = result[i] * weight
         }
 
         let pixels = result.iter().map(Self::color_to_pixel).collect();
