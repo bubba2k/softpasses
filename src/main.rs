@@ -36,8 +36,8 @@ fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_ra
 }
 
 fn main() {
-    let width: u32  = 1280 / 1;
-    let height: u32 = 1024 / 1;
+    let width: u32  = 1280 / 4;
+    let height: u32 = 1024 / 4;
     let aspect_ratio: f32 = width as f32 / height as f32;
 
     let pose = camera::Pose::look_at(Vec3f::new(-10.3, 0.6, 8.9), 
@@ -49,8 +49,8 @@ fn main() {
         3.44,
     0.0);
     let settings = camera::RenderSettings {
-        samples_per_pixel: 200,
-        max_bounces: 30,
+        samples_per_pixel: 500,
+        max_bounces: 10,
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 10000.0)

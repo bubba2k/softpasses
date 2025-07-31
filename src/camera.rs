@@ -6,7 +6,7 @@ use crate::util::{self, Interval};
 use core::f32;
 use std::fmt::Display;
 use std::{thread, vec};
-use std::time::{Instant, SystemTime};
+use std::time::Instant;
 
 #[derive(Clone)]
 // A viewport describes the focus plane of a camera.

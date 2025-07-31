@@ -490,7 +490,6 @@ impl HittableTrait for Parallelepiped {
 impl Parallelepiped {
     fn _new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Material) -> Self {
         let up = back_top_left - back_bottom_left;
-        let right = back_bottom_right - back_bottom_left;
         let depth = front_bottom_left - back_bottom_left;
 
         // Compute all 8 corners
