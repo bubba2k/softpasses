@@ -1,8 +1,6 @@
 use crate::math::ray::Ray;
-use crate::math::vector::{Pixel, Vec3f};
-use crate::math::util::Interval;
+use crate::math::vector::Vec3f;
 use core::f32;
-use std::fmt::Display;
 
 #[derive(Clone)]
 // A viewport describes the focus plane of a camera.
@@ -103,15 +101,6 @@ impl Pose {
 }
 
 #[derive(Clone)]
-pub struct RenderSettings {
-    pub image_width: u32,
-    pub image_height: u32,
-    pub samples_per_pixel: u32,
-    pub max_bounces: u32,
-    pub ray_limits: Interval,
-}
-
-#[derive(Clone)]
 pub struct Camera {
     pub lens: Lens,
     pub pose: Pose,
@@ -141,24 +130,5 @@ impl Camera {
            lens: lens,
            pose: pose,
         }
-    }
-}
-
-pub struct RenderResult {
-    pub pixels: Vec<Pixel>,
-    pub time_elapsed: f32,
-
-    pub image_height: u32,
-    pub image_width: u32,
-    pub num_samples: u32,
-    pub max_bounces: u32,
-    pub num_objects: u32,
-}
-
-impl Display for RenderResult {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let total_samples = self.image_height * self.image_width * self.num_samples;
-        write!(f, "RenderTimeSec\t{}\nWidth\t{}\nHeight\t{}\nSamplesPerPx\t{}\nTotalSamples\t{}\nMaxRayBounces\t{}\nObjects\t{}",
-                   self.time_elapsed, self.image_width, self.image_height, self.num_samples, total_samples, self.max_bounces, self.num_objects )
     }
 }

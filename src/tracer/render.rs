@@ -1,4 +1,4 @@
-use crate::tracer::camera::{Camera, RenderResult, RenderSettings};
+use crate::tracer::camera::{Camera, };
 use crate::tracer::hittable::{HittableList, HittableTrait};
 use crate::math::util::{ImageRegion, self};
 use crate::math::vector::{Color, Pixel, Vec3f};
@@ -123,12 +123,43 @@ fn background_color(dir: Vec3f) -> Color {
     lerped_color * BRIGHTNESS
 }
 
-
 fn color_to_pixel(c: &Color) -> Pixel {
     let r = util::linear_to_gamma(c.r());
     let g = util::linear_to_gamma(c.g());
     let b = util::linear_to_gamma(c.b());
     crate::math::vector::Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
+}
+
+#[derive(Clone)]
+pub struct RenderSettings {
+    pub image_width: u32,
+    pub image_height: u32,
+    pub samples_per_pixel: u32,
+    pub max_bounces: u32,
+    pub ray_limits: util::Interval,
+}
+
+pub struct RenderResult {
+    pub pixels: Vec<Pixel>,
+    pub time_elapsed: f32,
+
+    pub image_height: u32,
+    pub image_width: u32,
+    pub num_samples: u32,
+    pub max_bounces: u32,
+    pub num_objects: u32,
+}
+
+impl std::fmt::Display for RenderResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let total_samples = self.image_height * self.image_width * self.num_samples;
+        write!(f, "RenderTimeSec\t{}\nWidth\t{}\nHeight\t{}\nSamplesPerPx\t{}\nTotalSamples\t{}\nMaxRayBounces\t{}\nObjects\t{}",
+                   self.time_elapsed, self.image_width, self.image_height, self.num_samples, total_samples, self.max_bounces, self.num_objects )
+    }
+}
+
+pub trait Scheduler {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult;
 }
 
 pub fn render(camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {

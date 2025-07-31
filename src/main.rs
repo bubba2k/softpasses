@@ -44,7 +44,7 @@ fn main() {
         aspect_ratio,
         3.44,
     0.0);
-    let settings = camera::RenderSettings {
+    let settings = tracer::render::RenderSettings {
         samples_per_pixel: 500,
         max_bounces: 10,
         image_width: width,
