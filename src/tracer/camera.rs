@@ -114,6 +114,35 @@ pub struct RenderSettings {
     pub ray_limits: Interval,
 }
 
+fn render_region(cam: Camera, settings: RenderSettings, world: HittableList) -> Vec<Color> {
+    let mut colors: Vec<Color> = Vec::new();
+    let offset_range = 1.0 / settings.image_height as f32;
+    for y in 0..settings.image_height {
+        for x in 0..settings.image_width {
+            let u = x as  f32 / settings.image_width as f32;
+            let v = y as f32 / settings.image_height as f32;
+            let mut color: Color = Color::default();
+            // Perform multisampling here.
+            for _ in 0..settings.samples_per_pixel {
+                // The random offset into the pixel square we are considering atm (for multisampling)
+                // TODO: Make this discy instead
+                let rnd_offset_x = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
+                let rnd_offset_y = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
+                // Random ray origin offset (for DOF simulation)
+                // TODO: Make it so the DOF parameter describes the *actual* depth of field
+                let blur_offset = util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
+                let ray_origin = cam.pose.position
+                                          + cam.viewport.viewdown * blur_offset.y() 
+                                          + cam.viewport.viewright * blur_offset.x();
+                let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
+                color += trace_ray(&ray, &settings, &world, 0) * (1.0 / settings.samples_per_pixel as f32);
+            }
+            colors.push(color);
+        }
+    }
+    colors
+}
+
 fn background_color(dir: Vec3f) -> Color {
     // Compute the background color in the given direction. Basically we think of the environment
     // as a unitsphere, with the camera at the center. That way we can determine the backgrounds
@@ -241,52 +270,19 @@ impl Camera {
         Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
     }
 
-    fn render_region(cam: Camera, settings: RenderSettings, world: HittableList, samples: u32) -> Vec<Color> {
-        let mut colors: Vec<Color> = Vec::new();
-
-        let offset_range = 1.0 / settings.image_height as f32;
-
-        for y in 0..settings.image_height {
-            for x in 0..settings.image_width {
-                let u = x as  f32 / settings.image_width as f32;
-                let v = y as f32 / settings.image_height as f32;
-
-                let mut color: Color = Color::default();
-                // Perform multisampling here.
-                for _ in 0..samples {
-                    // The random offset into the pixel square we are considering atm (for multisampling)
-                    // TODO: Make this discy instead
-                    let rnd_offset_x = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
-                    let rnd_offset_y = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
-
-                    // Random ray origin offset (for DOF simulation)
-                    // TODO: Make it so the DOF parameter describes the *actual* depth of field
-                    let blur_offset = util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
-                    let ray_origin = cam.pose.position
-                                              + cam.viewport.viewdown * blur_offset.y() 
-                                              + cam.viewport.viewright * blur_offset.x();
-
-                    let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
-
-                    color += trace_ray(&ray, &settings, &world, 0) * (1.0 / samples as f32);
-                }
-
-                colors.push(color);
-            }
-        }
-
-        colors
-    }
-
     pub fn render(&self, settings: RenderSettings, world: &HittableList) -> RenderResult {
         // Should probably have a more user friendly way to set the number of threads at some point.
         let num_threads = 3;
 
         // Attempt to get a somewhat accurate estimate of the total render time here.
         // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
+        let estimate_settings = RenderSettings{
+            samples_per_pixel: 1,
+            ..settings
+        };
         let estimate_start = std::time::Instant::now();
 
-        Self::render_region(self.clone(), settings.clone(), world.clone(), 1);
+        render_region(self.clone(), estimate_settings, world.clone());
 
         // It seems a bit impossible to estimate how much the number of threads actually influences
         // the render time. Assume half for more than 1. Thats it uhhh
@@ -309,11 +305,13 @@ impl Camera {
         for _ in 0..num_threads {
             let cam_copy = self.clone();
             let world_copy = world.clone();
-            let settings_copy = settings.clone();
-            let spp_per_thread_copy = spp_per_thread.clone();
+            let thread_settings = RenderSettings{
+                samples_per_pixel: spp_per_thread,
+                ..settings
+            };
             thread_handles.push(
                 thread::spawn(move || {
-                    Self::render_region(cam_copy, settings_copy, world_copy, spp_per_thread_copy)
+                    render_region(cam_copy, thread_settings, world_copy)
                 }));
         };
 
@@ -335,6 +333,7 @@ impl Camera {
                 result[i] = result[i] + image[i];
             }
         }
+
         // ... and normalize the result
         for i in 0..len {
             result[i] = result[i] * weight
