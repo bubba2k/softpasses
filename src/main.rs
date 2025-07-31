@@ -8,7 +8,7 @@ mod tracer;
 use std::f32::consts::PI;
 
 use math::vector::{Vec3f, vec3};
-use tracer::camera::{self, Camera, Pose, Lens, RenderSettings};
+use tracer::camera::{self, Camera};
 use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
 use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
 use math::util::Interval;
