@@ -4,7 +4,7 @@ use rand::Rng;
 use crate::math::vector::{Vec3f, Color};
 use crate::math::util;
 use crate::math::ray::Ray;
-use crate::hittable::HitRecord;
+use super::hittable::HitRecord;
 
 pub trait MaterialTrait {
     // Returns None if the ray was absorbed.

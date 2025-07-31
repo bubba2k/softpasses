@@ -1,4 +1,4 @@
-use crate::material::Material;
+use super::material::Material;
 use crate::math::ray::{Ray};
 use crate::math::vector::{self, Vec3f, CoordinatePlane};
 use crate::math::util::Interval;

@@ -1,5 +1,5 @@
-use crate::hittable::{HittableList, HittableTrait};
-use crate::material::MaterialTrait;
+use super::hittable::{HittableList, HittableTrait};
+use super::material::MaterialTrait;
 use crate::math::ray::Ray;
 use crate::math::vector::{Color, Pixel, Vec3f};
 use crate::math::util::{self, Interval};

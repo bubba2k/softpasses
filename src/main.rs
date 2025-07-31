@@ -3,16 +3,14 @@
 
 mod math;
 mod io;
-mod camera;
-mod hittable;
-mod material;
+mod tracer;
 
 use std::f32::consts::PI;
 
 use math::vector::{Vec3f, vec3};
-use camera::{Camera};
-use hittable::{HittableList, Hittable, Sphere, Plane};
-use material::{MatLambertDiffuse, MatGlass, MatPrincipled, MaterialTrait};
+use tracer::camera::{self, Camera, Pose, Lens, RenderSettings};
+use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
+use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
 use math::util::Interval;
 
 // Scatter spheres on a plane
@@ -26,7 +24,7 @@ fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_ra
         let distance = math::util::rand_range_f(0.0, 1.0).sqrt() * scatter_radius;
         let (x, y) = (f32::cos(angle) * distance, f32::sin(angle) * distance); 
         let center = Vec3f::new(x, height, y);
-        let material = material::Material::random_instance();
+        let material = Material::random_instance();
         let sphere = Sphere::new(center, radius, material);
 
         world.push(sphere);
