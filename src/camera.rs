@@ -1,8 +1,8 @@
 use crate::hittable::{HittableList, HittableTrait};
 use crate::material::MaterialTrait;
-use crate::ray::Ray;
-use crate::vector::{Color, Pixel, Vec3f};
-use crate::util::{self, Interval};
+use crate::math::ray::Ray;
+use crate::math::vector::{Color, Pixel, Vec3f};
+use crate::math::util::{self, Interval};
 use core::f32;
 use std::fmt::Display;
 use std::{thread, vec};

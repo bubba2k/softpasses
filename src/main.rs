@@ -1,31 +1,29 @@
 // Allow dead code for now
 #![allow(dead_code)]
 
+mod math;
 mod io;
-mod vector;
 mod camera;
-mod ray;
 mod hittable;
-mod util;
 mod material;
 
 use std::f32::consts::PI;
 
-use vector::{Vec3f, vec3};
+use math::vector::{Vec3f, vec3};
 use camera::{Camera};
 use hittable::{HittableList, Hittable, Sphere, Plane};
 use material::{MatLambertDiffuse, MatGlass, MatPrincipled, MaterialTrait};
-use util::Interval;
+use math::util::Interval;
 
 // Scatter spheres on a plane
 fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
     for _ in 0..count {
         // Make it so the spheres "sit" on the given plane height
-        let radius = util::rand_range_f(sphere_radius.0, sphere_radius.1);
+        let radius = math::util::rand_range_f(sphere_radius.0, sphere_radius.1);
         let height = height + radius;
 
-        let angle = util::rand_range_f(0.0, 2.0 * PI);
-        let distance = util::rand_range_f(0.0, 1.0).sqrt() * scatter_radius;
+        let angle = math::util::rand_range_f(0.0, 2.0 * PI);
+        let distance = math::util::rand_range_f(0.0, 1.0).sqrt() * scatter_radius;
         let (x, y) = (f32::cos(angle) * distance, f32::sin(angle) * distance); 
         let center = Vec3f::new(x, height, y);
         let material = material::Material::random_instance();

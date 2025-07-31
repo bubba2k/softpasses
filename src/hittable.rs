@@ -1,7 +1,7 @@
 use crate::material::Material;
-use crate::ray::{Ray};
-use crate::vector::{self, Vec3f, CoordinatePlane};
-use crate::util::Interval;
+use crate::math::ray::{Ray};
+use crate::math::vector::{self, Vec3f, CoordinatePlane};
+use crate::math::util::Interval;
 
 use core::f32;
 

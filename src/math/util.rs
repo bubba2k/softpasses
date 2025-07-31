@@ -1,4 +1,4 @@
-use crate::vector::Vec3f;
+use crate::math::vector::Vec3f;
 
 #[derive(Clone, Copy)]
 pub struct Interval {

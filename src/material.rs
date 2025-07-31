@@ -1,9 +1,9 @@
 use rand::distr::Distribution;
 use rand::Rng;
 
-use crate::vector::Vec3f;
-use crate::util;
-use crate::{ray::Ray, vector::Color};
+use crate::math::vector::{Vec3f, Color};
+use crate::math::util;
+use crate::math::ray::Ray;
 use crate::hittable::HitRecord;
 
 pub trait MaterialTrait {
