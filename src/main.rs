@@ -51,7 +51,7 @@ fn main() {
         image_height: height,
         ray_limits: Interval::new(0.001, 10000.0)
     };
-    let camera = Camera::new(pose, lens, settings);
+    let camera = Camera::new(pose, lens);
 
     // Scene setup
     let mat_floor = MatLambertDiffuse::new(Vec3f::new(0.2, 0.9, 0.2), 1.0);
@@ -74,7 +74,7 @@ fn main() {
     world.push(sphere3);
     world.push(sphere4);
    
-    let render_result = camera.render(&world);
+    let render_result = camera.render(settings, &world);
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);

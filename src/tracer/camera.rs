@@ -204,13 +204,12 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &HittableList, _bou
 #[derive(Clone)]
 pub struct Camera {
     pub lens: Lens,
-    pub pose: Pose, 
-    pub settings: RenderSettings,
+    pub pose: Pose,
     pub viewport: Viewport,
 }
 
 impl Camera {
-    pub fn new(pose: Pose, lens: Lens, render_settings: RenderSettings) -> Self {
+    pub fn new(pose: Pose, lens: Lens) -> Self {
         // Compute the viewport (the focus plane) of the camera
         let viewport_center = pose.position + pose.direction * lens.focal_distance;
         let dir  = pose.direction;
@@ -231,7 +230,6 @@ impl Camera {
            viewport: viewport,
            lens: lens,
            pose: pose,
-           settings: render_settings,
         }
     }
 
@@ -243,15 +241,15 @@ impl Camera {
         Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
     }
 
-    fn render_region(cam: Camera, world: HittableList, samples: u32) -> Vec<Color> {
+    fn render_region(cam: Camera, settings: RenderSettings, world: HittableList, samples: u32) -> Vec<Color> {
         let mut colors: Vec<Color> = Vec::new();
 
-        let offset_range = 1.0 / cam.settings.image_height as f32;
+        let offset_range = 1.0 / settings.image_height as f32;
 
-        for y in 0..cam.settings.image_height {
-            for x in 0..cam.settings.image_width {
-                let u = x as  f32 / cam.settings.image_width as f32;
-                let v = y as f32 / cam.settings.image_height as f32;
+        for y in 0..settings.image_height {
+            for x in 0..settings.image_width {
+                let u = x as  f32 / settings.image_width as f32;
+                let v = y as f32 / settings.image_height as f32;
 
                 let mut color: Color = Color::default();
                 // Perform multisampling here.
@@ -270,7 +268,7 @@ impl Camera {
 
                     let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
-                    color += trace_ray(&ray, &cam.settings, &world, 0) * (1.0 / samples as f32);
+                    color += trace_ray(&ray, &settings, &world, 0) * (1.0 / samples as f32);
                 }
 
                 colors.push(color);
@@ -280,7 +278,7 @@ impl Camera {
         colors
     }
 
-    pub fn render(&self, world: &HittableList) -> RenderResult {
+    pub fn render(&self, settings: RenderSettings, world: &HittableList) -> RenderResult {
         // Should probably have a more user friendly way to set the number of threads at some point.
         let num_threads = 3;
 
@@ -288,12 +286,12 @@ impl Camera {
         // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
         let estimate_start = std::time::Instant::now();
 
-        Self::render_region(self.clone(), world.clone(), 1);
+        Self::render_region(self.clone(), settings.clone(), world.clone(), 1);
 
         // It seems a bit impossible to estimate how much the number of threads actually influences
         // the render time. Assume half for more than 1. Thats it uhhh
         let estimate_duration = estimate_start.elapsed().as_secs_f32()
-                                   * self.settings.samples_per_pixel as f32  // Attenuate for actual spp value
+                                   * settings.samples_per_pixel as f32  // Attenuate for actual spp value
                                    * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
 
         let estimate_minutes = estimate_duration as u32 / 60;
@@ -306,15 +304,16 @@ impl Camera {
         // Let several threads render the entire image with the same settings. For now,
         // we simply copy all relevant data right over. Might change that later on.
         // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
-        let spp_per_thread = self.settings.samples_per_pixel / num_threads;
+        let spp_per_thread = settings.samples_per_pixel / num_threads;
         let mut thread_handles = Vec::new();
         for _ in 0..num_threads {
-            let cam_copy = (*self).clone();
+            let cam_copy = self.clone();
             let world_copy = world.clone();
+            let settings_copy = settings.clone();
             let spp_per_thread_copy = spp_per_thread.clone();
             thread_handles.push(
                 thread::spawn(move || {
-                    Self::render_region(cam_copy, world_copy, spp_per_thread_copy)
+                    Self::render_region(cam_copy, settings_copy, world_copy, spp_per_thread_copy)
                 }));
         };
 
@@ -350,10 +349,10 @@ impl Camera {
             pixels: pixels,
             time_elapsed: duration.as_secs_f32(),
 
-            image_height: self.settings.image_height,
-            image_width: self.settings.image_width,
-            num_samples: self.settings.samples_per_pixel,
-            max_bounces: self.settings.max_bounces,
+            image_height: settings.image_height,
+            image_width: settings.image_width,
+            num_samples: settings.samples_per_pixel,
+            max_bounces: settings.max_bounces,
             num_objects: world.num_objects(),
         }
     }
