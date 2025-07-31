@@ -1,5 +1,3 @@
-use num::range;
-
 use crate::hittable::{HittableList, HittableTrait};
 use crate::material::MaterialTrait;
 use crate::ray::Ray;
@@ -7,9 +5,10 @@ use crate::vector::{Color, Pixel, Vec3f};
 use crate::util::{self, Interval};
 use core::f32;
 use std::fmt::Display;
-use std::time::{Duration, Instant};
+use std::{thread, vec};
+use std::time::Instant;
 
-#[derive(Debug)]
+#[derive(Clone)]
 // A viewport describes the focus plane of a camera.
 pub struct Viewport {
     pub viewdown: Vec3f,
@@ -45,6 +44,8 @@ impl Viewport {
     }
 }
 
+
+#[derive(Clone)]
 pub struct Lens {
     focal_length: f32,
     sensor_width: f32,
@@ -93,6 +94,7 @@ impl Lens {
 }
 
 // Position and orientation of a camera
+#[derive(Clone)]
 pub struct Pose {
     position: Vec3f,
     direction: Vec3f,
@@ -119,6 +121,7 @@ impl Pose {
     }
 }
 
+#[derive(Clone)]
 pub struct RenderSettings {
     pub image_width: u32,
     pub image_height: u32,
@@ -127,6 +130,7 @@ pub struct RenderSettings {
     pub ray_limits: Interval,
 }
 
+#[derive(Clone)]
 pub struct Camera {
     pub lens: Lens,
     pub pose: Pose, 
@@ -226,7 +230,7 @@ impl Camera {
         }
     }
 
-    fn ray_color_it(&self, ray: &Ray, world: &HittableList, bounce: u32) -> Color {
+    fn ray_color_it(&self, ray: &Ray, world: &HittableList, _bounce: u32) -> Color {
         static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
 
         let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
@@ -270,22 +274,22 @@ impl Camera {
         }
     }
 
-    fn render_region(&self, world: &HittableList, start_line: u32, num_lines: u32) -> Vec<Pixel> {
-        let mut pixels: Vec<Pixel> = Vec::new();
+    fn render_region(cam: Camera, world: HittableList, samples: u32) -> Vec<Color> {
+        let mut colors: Vec<Color> = Vec::new();
 
-        let offset_range = 1.0 / self.settings.image_height as f32;
+        let offset_range = 1.0 / cam.settings.image_height as f32;
 
         let begin = Instant::now();
 
-        for y in start_line..(start_line + num_lines) {
-            Self::progress_bar(y, self.settings.image_height, &begin);
-            for x in 0..self.settings.image_width {
-                let u = x as  f32 / self.settings.image_width as f32;
-                let v = y as f32 / self.settings.image_height as f32;
+        for y in 0..cam.settings.image_height {
+            Self::progress_bar(y, cam.settings.image_height, &begin);
+            for x in 0..cam.settings.image_width {
+                let u = x as  f32 / cam.settings.image_width as f32;
+                let v = y as f32 / cam.settings.image_height as f32;
 
                 let mut color: Color = Color::default();
                 // Perform multisampling here.
-                for _ in 0..self.settings.samples_per_pixel {
+                for _ in 0..cam.settings.samples_per_pixel {
                     // The random offset into the pixel square we are considering atm (for multisampling)
                     // TODO: Make this discy instead
                     let rnd_offset_x = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
@@ -293,27 +297,66 @@ impl Camera {
 
                     // Random ray origin offset (for DOF simulation)
                     // TODO: Make it so the DOF parameter describes the *actual* depth of field
-                    let blur_offset = util::rand_vec_on_unit_disc() * self.lens.dof / self.lens.focal_distance;
-                    let ray_origin = self.pose.position
-                                              + self.viewport.viewdown * blur_offset.y() 
-                                              + self.viewport.viewright * blur_offset.x();
+                    let blur_offset = util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
+                    let ray_origin = cam.pose.position
+                                              + cam.viewport.viewdown * blur_offset.y() 
+                                              + cam.viewport.viewright * blur_offset.x();
 
-                    let ray = self.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
+                    let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
-                    color += self.ray_color_it(&ray, world, 0) * 
-                                            (1.0 / self.settings.samples_per_pixel as f32);
+                    color += cam.ray_color_it(&ray, &world, 0) * 
+                                            (1.0 / cam.settings.samples_per_pixel as f32);
                 }
 
-                pixels.push(Self::color_to_pixel(&color));
+                colors.push(color);
             }
         }
 
-        pixels
+        colors
     }
 
     pub fn render(&self, world: &HittableList) -> RenderResult {
         let start = std::time::Instant::now();
-        let pixels = self.render_region(world, 0, self.settings.image_height);
+
+        // Let several threads render the entire image with the same settings. For now,
+        // we simply copy all relevant data right over. Might change that later on.
+        // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
+        // Should probably have a more user friendly way to set the number of threads.
+        // For now, it stays at 1, since multithreading does not yield a speedup on the ole Fujitsu Esprimo.
+        let num_threads = 1;
+        let spp_per_thread = self.settings.samples_per_pixel / num_threads;
+        let mut thread_handles = Vec::new();
+        for _ in 0..num_threads {
+            let cam_copy = (*self).clone();
+            let world_copy = world.clone();
+            let spp_per_thread_copy = spp_per_thread.clone();
+            thread_handles.push(
+                thread::spawn(move || {
+                    Self::render_region(cam_copy, world_copy, spp_per_thread_copy)
+                }));
+        };
+
+        // Await and collect images from each thread.
+        let mut images: Vec<_> = Vec::new();
+        for handle in thread_handles {
+            let image = handle.join().unwrap();
+            images.push(image);
+        }
+
+        // Perform weighted sum of all generated images.
+        let weight = 1.0 / num_threads as f32;
+        let len = images[0].len();
+
+        let mut result = vec![Color::new(0.0, 0.0, 0.0); len];
+        eprintln!("Num images from threads: {}", images.len());
+        for image in images {
+            for i in 0..len {
+                result[i] = result[i] + (image[i] * weight);
+            }
+        }
+
+        let pixels = result.iter().map(Self::color_to_pixel).collect();
+
         let duration = start.elapsed();
         eprintln!("Done in {:?}", duration);
 

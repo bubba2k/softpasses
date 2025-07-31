@@ -75,6 +75,7 @@ fn hit_sphere(ray: &Ray, center: &Vec3f, radius: f32) -> Option<f32> {
     }
 }
 
+#[derive(Clone)]
 pub enum Hittable {
     Sphere(Sphere),
     Parallelogram(Parallelogram),
@@ -158,7 +159,7 @@ impl AABoundingBox {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct HittableList {
     list: Vec<Hittable>,
     aabb: AABoundingBox,
@@ -198,6 +199,7 @@ impl HittableTrait for HittableList {
     }
 }
 
+#[derive(Clone)]
 pub struct Sphere {
     pub center: Vec3f,
     pub radius: f32,
@@ -242,6 +244,7 @@ impl HittableTrait for Sphere {
     }
 }
 
+#[derive(Clone)]
 pub struct Plane {
     // The plane in HNF
     normal: Vec3f,
@@ -309,6 +312,7 @@ impl HittableTrait for Plane {
     }
 }
 
+#[derive(Clone)]
 pub struct Parallelogram {
     // The plane the rectangle lies on in HNF
     normal: Vec3f,
@@ -462,6 +466,7 @@ impl HittableTrait for Parallelogram {
     }
 }
 
+#[derive(Clone)]
 pub struct Parallelepiped {
     // List of the 6 faces 
     list: HittableList,

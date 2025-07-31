@@ -1,4 +1,3 @@
-use std::{f32, fmt::LowerHex};
 use crate::vector::Vec3f;
 
 #[derive(Clone, Copy)]

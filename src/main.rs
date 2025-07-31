@@ -17,7 +17,7 @@ use hittable::{HittableList, Sphere, Plane, Parallelogram};
 use material::{MatLambertDiffuse, MatFaceDebug, MatGlass, MatNormalDebug, MatPrincipled, MaterialTrait};
 use util::Interval;
 
-use crate::{hittable::{Hittable, Parallelepiped}, material::MatEmission, vector::{vec3, CoordinatePlane}};
+use crate::{hittable::{Hittable}, vector::{vec3, CoordinatePlane}};
 
 // Scatter spheres on a plane
 fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
