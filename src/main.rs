@@ -74,7 +74,7 @@ fn main() {
     world.push(sphere3);
     world.push(sphere4);
    
-    let render_result = camera.render(settings, &world);
+    let render_result = tracer::render::render(camera, settings, &world);
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
