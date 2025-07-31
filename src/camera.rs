@@ -282,7 +282,6 @@ impl Camera {
         let begin = Instant::now();
 
         for y in 0..cam.settings.image_height {
-            Self::progress_bar(y, cam.settings.image_height, &begin);
             for x in 0..cam.settings.image_width {
                 let u = x as  f32 / cam.settings.image_width as f32;
                 let v = y as f32 / cam.settings.image_height as f32;
@@ -321,7 +320,6 @@ impl Camera {
         // we simply copy all relevant data right over. Might change that later on.
         // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
         // Should probably have a more user friendly way to set the number of threads.
-        // For now, it stays at 1, since multithreading does not yield a speedup on the ole Fujitsu Esprimo.
         let num_threads = 2;
         let spp_per_thread = self.settings.samples_per_pixel / num_threads;
         let mut thread_handles = Vec::new();
@@ -342,7 +340,6 @@ impl Camera {
             images.push(image);
         }
 
-        eprintln!("Received {} images", images.len());
         // Perform weighted sum of all generated images.
         let weight = 1.0 / num_threads as f32;
         let len = images[0].len();
@@ -362,7 +359,7 @@ impl Camera {
         let pixels = result.iter().map(Self::color_to_pixel).collect();
 
         let duration = start.elapsed();
-        eprintln!("Done in {:?}", duration);
+        eprintln!("Done in {:?} with {} threads.", duration, num_threads);
 
         RenderResult {
             pixels: pixels,
