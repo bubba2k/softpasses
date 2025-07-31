@@ -45,12 +45,13 @@ pub fn rand_range_f(low: f32, high: f32) -> f32 {
 pub fn rand_vec3_range(min: f32, max: f32) -> Vec3f {
     Vec3f::new( rand_range_f(min, max), 
                 rand_range_f(min, max), 
-                rand_range_f(min, max)
+                rand_range_f(min, max),
     )
 }
 
 pub fn rand_unit_vec() -> Vec3f {
     // Generate vectors until we find one that has the properties we want
+    // Not evenly distributed on unit sphere!
     loop {
         let vec_rand = rand_vec3_range(-1.0, 1.0);
         let length_squared = vec_rand.length_squared();
@@ -64,6 +65,7 @@ pub fn rand_unit_vec() -> Vec3f {
 }
 
 pub fn rand_vec_on_unit_disc() -> Vec3f {
+    // Not evenly distributed on disc
     loop {
         let vec = Vec3f::new(rand_range_f(-1.0, 1.0),
                                           rand_range_f(-1.0, 1.0), 0.0);
@@ -84,5 +86,5 @@ pub fn rand_unit_vec_on_hemisphere(normal: &Vec3f) -> Vec3f {
 }
 
 pub fn rand_bool(p: f32) -> bool {
-    rand::random_bool(p.into())
+    fastrand::f32() < p
 }
