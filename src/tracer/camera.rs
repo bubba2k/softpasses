@@ -1,7 +1,7 @@
 use super::hittable::{HittableList, HittableTrait};
 use crate::math::ray::Ray;
 use crate::math::vector::{Color, Pixel, Vec3f};
-use crate::math::util::{self, Interval};
+use crate::math::util::{self, ImageRegion, Interval};
 use core::f32;
 use std::fmt::Display;
 use std::{thread, vec};
@@ -166,7 +166,8 @@ impl Camera {
         };
         let estimate_start = std::time::Instant::now();
 
-        trace::render_region(self.clone(), estimate_settings, world.clone());
+        let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
+        trace::render_region(self.clone(), estimate_settings, world.clone(), region.clone());
 
         // It seems a bit impossible to estimate how much the number of threads actually influences
         // the render time. Assume half for more than 1. Thats it uhhh
@@ -193,9 +194,10 @@ impl Camera {
                 samples_per_pixel: spp_per_thread,
                 ..settings
             };
+            let region_copy = region.clone();
             thread_handles.push(
-                thread::spawn(move || {
-                    trace::render_region(cam_copy, thread_settings, world_copy)
+                thread::spawn( || {
+                    trace::render_region(cam_copy, thread_settings, world_copy, region_copy)
                 }));
         };
 

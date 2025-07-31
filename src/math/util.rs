@@ -34,6 +34,25 @@ impl Interval {
     }
 }
 
+#[derive(Clone)]
+pub struct ImageRegion {
+    pub x: (u32, u32),
+    pub y: (u32, u32),
+}
+
+impl ImageRegion {
+    pub const fn new(x_begin: u32, y_begin: u32, x_size: u32, y_size: u32) -> Self {
+        ImageRegion {
+            x: (x_begin, x_begin + x_size),
+            y: (y_begin, y_begin + y_size),
+        }
+    }
+
+    pub const fn whole_image(image_width: u32, image_height: u32) -> Self {
+        Self::new(0, 0, image_width, image_height)
+    }
+}
+
 pub fn linear_to_gamma(linear_component: f32) -> f32 {
     num::clamp(linear_component, 0.0, 1.0).sqrt()
 }

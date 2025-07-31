@@ -3,12 +3,13 @@ use super::material::{MaterialTrait};
 use crate::camera::{Camera, RenderSettings};
 use crate::math::{ray::Ray, vector::{Vec3f, Color}, util};
 
-
-pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList) -> Vec<Color> {
+// Render a specific region of the image.
+pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList, region: util::ImageRegion) -> Vec<Color> {
     let mut colors: Vec<Color> = Vec::new();
     let offset_range = 1.0 / settings.image_height as f32;
-    for y in 0..settings.image_height {
-        for x in 0..settings.image_width {
+
+    for y in region.y.0..region.y.1 {
+        for x in region.x.0..region.x.1 {
             let u = x as  f32 / settings.image_width as f32;
             let v = y as f32 / settings.image_height as f32;
             let mut color: Color = Color::default();
