@@ -36,8 +36,8 @@ fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_ra
 }
 
 fn main() {
-    let width: u32  = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32  = 1280 / 1;
+    let height: u32 = 1024 / 1;
     let aspect_ratio: f32 = width as f32 / height as f32;
 
     let pose = camera::Pose::look_at(Vec3f::new(-10.3, 0.6, 8.9), 

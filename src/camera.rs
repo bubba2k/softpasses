@@ -6,7 +6,7 @@ use crate::util::{self, Interval};
 use core::f32;
 use std::fmt::Display;
 use std::{thread, vec};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 
 #[derive(Clone)]
 // A viewport describes the focus plane of a camera.
@@ -279,8 +279,6 @@ impl Camera {
 
         let offset_range = 1.0 / cam.settings.image_height as f32;
 
-        let begin = Instant::now();
-
         for y in 0..cam.settings.image_height {
             for x in 0..cam.settings.image_width {
                 let u = x as  f32 / cam.settings.image_width as f32;
@@ -314,13 +312,31 @@ impl Camera {
     }
 
     pub fn render(&self, world: &HittableList) -> RenderResult {
+        // Should probably have a more user friendly way to set the number of threads at some point.
+        let num_threads = 3;
+
+        // Attempt to get a somewhat accurate estimate of the total render time here.
+        // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
+        let estimate_start = std::time::Instant::now();
+
+        Self::render_region(self.clone(), world.clone(), 1);
+
+        // It seems a bit impossible to estimate how much the number of threads actually influences
+        // the render time. Assume half for more than 1. Thats it uhhh
+        let estimate_duration = estimate_start.elapsed().as_secs_f32()
+                                   * self.settings.samples_per_pixel as f32  // Attenuate for actual spp value
+                                   * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
+
+        let estimate_minutes = estimate_duration as u32 / 60;
+        let estimate_seconds = estimate_duration as u32 % 60;
+        let now = chrono::Local::now();
+        eprintln!("Started at {}\nEst. render time: {:02}:{:02}", now.format("%H:%M:%S"), estimate_minutes, estimate_seconds);
+
         let start = std::time::Instant::now();
 
         // Let several threads render the entire image with the same settings. For now,
         // we simply copy all relevant data right over. Might change that later on.
         // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
-        // Should probably have a more user friendly way to set the number of threads.
-        let num_threads = 2;
         let spp_per_thread = self.settings.samples_per_pixel / num_threads;
         let mut thread_handles = Vec::new();
         for _ in 0..num_threads {
