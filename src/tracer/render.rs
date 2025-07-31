@@ -137,6 +137,7 @@ pub struct RenderSettings {
     pub samples_per_pixel: u32,
     pub max_bounces: u32,
     pub ray_limits: util::Interval,
+    pub thread_count: u32,
 }
 
 pub struct RenderResult {
@@ -162,76 +163,82 @@ pub trait Scheduler {
     fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult;
 }
 
-pub fn render(camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
-    // Should probably have a more user friendly way to set the number of threads at some point.
-    let num_threads = 3;
-    // Attempt to get a somewhat accurate estimate of the total render time here.
-    // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
-    let estimate_settings = RenderSettings{
-        samples_per_pixel: 1,
-        ..settings
-    };
-    let estimate_start = std::time::Instant::now();
-    let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
-    render_region(camera.clone(), estimate_settings, world.clone(), region.clone());
-    // It seems a bit impossible to estimate how much the number of threads actually influences
-    // the render time. Assume half for more than 1. Thats it uhhh
-    let estimate_duration = estimate_start.elapsed().as_secs_f32()
-                               * settings.samples_per_pixel as f32  // Attenuate for actual spp value
-                               * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
-    let estimate_minutes = estimate_duration as u32 / 60;
-    let estimate_seconds = estimate_duration as u32 % 60;
-    let now = chrono::Local::now();
-    eprintln!("Started at {}\nEst. render time: {:02}:{:02}", now.format("%H:%M:%S"), estimate_minutes, estimate_seconds);
-    let start = std::time::Instant::now();
-    // Let several threads render the entire image with the same settings. For now,
-    // we simply copy all relevant data right over. Might change that later on.
-    // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
-    let spp_per_thread = settings.samples_per_pixel / num_threads;
-    let mut thread_handles = Vec::new();
-    for _ in 0..num_threads {
-        let cam_copy = camera.clone();
-        let world_copy = world.clone();
-        let thread_settings = RenderSettings{
-            samples_per_pixel: spp_per_thread,
+#[derive(Default)]
+pub struct NaiveScheduler {}
+
+impl Scheduler for NaiveScheduler {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+        // Should probably have a more user friendly way to set the number of threads at some point.
+        let num_threads = settings.thread_count;
+        // Attempt to get a somewhat accurate estimate of the total render time here.
+        // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
+        let estimate_settings = RenderSettings{
+            samples_per_pixel: 1,
             ..settings
         };
-        let region_copy = region.clone();
-        thread_handles.push(
-            std::thread::spawn( || {
-                render_region(cam_copy, thread_settings, world_copy, region_copy)
-            }));
-    };
-    // Await and collect images from each thread.
-    let mut images: Vec<_> = Vec::new();
-    for handle in thread_handles {
-        let image = handle.join().unwrap();
-        images.push(image);
-    }
-    // Perform weighted sum of all generated images.
-    let weight = 1.0 / num_threads as f32;
-    let len = images[0].len();
-    // Sum all the images up...
-    let mut result = vec![Color::new(0.0, 0.0, 0.0); len];
-    for image in images {
-        for i in 0..result.len() {
-            result[i] = result[i] + image[i];
+        let estimate_start = std::time::Instant::now();
+        let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
+        render_region(camera.clone(), estimate_settings, world.clone(), region.clone());
+        // It seems a bit impossible to estimate how much the number of threads actually influences
+        // the render time. Assume half for more than 1. Thats it uhhh
+        let estimate_duration = estimate_start.elapsed().as_secs_f32()
+                                   * settings.samples_per_pixel as f32  // Attenuate for actual spp value
+                                   * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
+        let estimate_minutes = estimate_duration as u32 / 60;
+        let estimate_seconds = estimate_duration as u32 % 60;
+        let now = chrono::Local::now();
+        eprintln!("Started at {}\nEst. render time: {:02}:{:02}", now.format("%H:%M:%S"), estimate_minutes, estimate_seconds);
+        let start = std::time::Instant::now();
+        // Let several threads render the entire image with the same settings. For now,
+        // we simply copy all relevant data right over. Might change that later on.
+        // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
+        let spp_per_thread = settings.samples_per_pixel / num_threads;
+        let mut thread_handles = Vec::new();
+        for _ in 0..num_threads {
+            let cam_copy = camera.clone();
+            let world_copy = world.clone();
+            let thread_settings = RenderSettings{
+                samples_per_pixel: spp_per_thread,
+                ..settings
+            };
+            let region_copy = region.clone();
+            thread_handles.push(
+                std::thread::spawn( || {
+                    render_region(cam_copy, thread_settings, world_copy, region_copy)
+                }));
+        };
+        // Await and collect images from each thread.
+        let mut images: Vec<_> = Vec::new();
+        for handle in thread_handles {
+            let image = handle.join().unwrap();
+            images.push(image);
+        }
+        // Perform weighted sum of all generated images.
+        let weight = 1.0 / num_threads as f32;
+        let len = images[0].len();
+        // Sum all the images up...
+        let mut result = vec![Color::new(0.0, 0.0, 0.0); len];
+        for image in images {
+            for i in 0..result.len() {
+                result[i] = result[i] + image[i];
+            }
+        }
+        // ... and normalize the result
+        for i in 0..len {
+            result[i] = result[i] * weight
+        }
+        let pixels = result.iter().map(color_to_pixel).collect();
+        let duration = start.elapsed();
+        eprintln!("Done in {:?} with {} threads.", duration, num_threads);
+        RenderResult {
+            pixels: pixels,
+            time_elapsed: duration.as_secs_f32(),
+            image_height: settings.image_height,
+            image_width: settings.image_width,
+            num_samples: settings.samples_per_pixel,
+            max_bounces: settings.max_bounces,
+            num_objects: world.num_objects(),
         }
     }
-    // ... and normalize the result
-    for i in 0..len {
-        result[i] = result[i] * weight
-    }
-    let pixels = result.iter().map(color_to_pixel).collect();
-    let duration = start.elapsed();
-    eprintln!("Done in {:?} with {} threads.", duration, num_threads);
-    RenderResult {
-        pixels: pixels,
-        time_elapsed: duration.as_secs_f32(),
-        image_height: settings.image_height,
-        image_width: settings.image_width,
-        num_samples: settings.samples_per_pixel,
-        max_bounces: settings.max_bounces,
-        num_objects: world.num_objects(),
-    }
 }
+
