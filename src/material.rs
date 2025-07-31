@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use rand::distr::Distribution;
 use rand::Rng;
 
@@ -123,7 +121,7 @@ impl MatBounceDebug {
 }
 
 impl MaterialTrait for MatBounceDebug {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         static COLOR_RED:  Color = Vec3f::new(1.0, 0.0, 0.0);
         static COLOR_LOW:  Color = Vec3f::new(0.4, 0.4, 0.4);
         static COLOR_HIGH: Color = Vec3f::new(1.0, 1.0, 1.0);
@@ -149,7 +147,7 @@ pub struct MatLambertDiffuse {
 }
 
 impl MatLambertDiffuse {
-    pub fn new(c: Color, refl: f32) -> Material {
+    pub fn new(c: Color, _refl: f32) -> Material {
         Material::MatLambertDiffuse(MatLambertDiffuse { albedo: c })
     }
 }
@@ -177,7 +175,7 @@ impl MaterialTrait for MatLambertDiffuse {
 }
 
 fn vec_reflect(v_norm: &Vec3f, n_norm: &Vec3f) -> Vec3f {
-    (*v_norm - (*n_norm * 2.0 * v_norm.dot(n_norm)))
+    *v_norm - (*n_norm * 2.0 * v_norm.dot(n_norm))
 }
 
 fn vec_refract(v: &Vec3f, n: &Vec3f, etai_over_etat: f32) -> Vec3f {
@@ -253,7 +251,7 @@ pub struct MatEmission {
 }
 
 impl MaterialTrait for MatEmission {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, _ray_in: &Ray, _hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         // This material simply absorbs the ray and gives back a solid color of,
         // potentially, quite high brightness.
         let att_color = self.color * self.strength;

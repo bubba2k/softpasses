@@ -11,17 +11,15 @@ mod material;
 
 use std::f32::consts::PI;
 
-use vector::{Vec3f, Color};
+use vector::{Vec3f, vec3};
 use camera::{Camera};
-use hittable::{HittableList, Sphere, Plane, Parallelogram};
-use material::{MatLambertDiffuse, MatFaceDebug, MatGlass, MatNormalDebug, MatPrincipled, MaterialTrait};
+use hittable::{HittableList, Hittable, Sphere, Plane};
+use material::{MatLambertDiffuse, MatGlass, MatPrincipled, MaterialTrait};
 use util::Interval;
-
-use crate::{hittable::{Hittable}, vector::{vec3, CoordinatePlane}};
 
 // Scatter spheres on a plane
 fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
-    for i in 0..count {
+    for _ in 0..count {
         // Make it so the spheres "sit" on the given plane height
         let radius = util::rand_range_f(sphere_radius.0, sphere_radius.1);
         let height = height + radius;
