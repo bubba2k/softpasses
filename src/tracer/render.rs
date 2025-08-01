@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use crate::tracer::camera::{Camera, };
 use crate::tracer::hittable::{HittableList, HittableTrait};
 use crate::math::util::{ImageRegion, self};
@@ -137,7 +139,6 @@ pub struct RenderSettings {
     pub samples_per_pixel: u32,
     pub max_bounces: u32,
     pub ray_limits: util::Interval,
-    pub thread_count: u32,
 }
 
 pub struct RenderResult {
@@ -164,12 +165,43 @@ pub trait Scheduler {
 }
 
 #[derive(Default)]
-pub struct NaiveScheduler {}
+pub struct NaiveSingleThreadScheduler {}
 
-impl Scheduler for NaiveScheduler {
+impl Scheduler for NaiveSingleThreadScheduler {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+        let start = Instant::now();
+
+        let region = ImageRegion::whole_image(settings.image_width, settings.image_height);
+        let image = render_region(camera, settings.clone(), world.clone(), region);
+
+        let image_pixels = image.iter().map(color_to_pixel).collect();
+
+        RenderResult { 
+            pixels: image_pixels, 
+            time_elapsed: start.elapsed().as_secs_f32(),
+            image_height: settings.image_height,
+            image_width: settings.image_width,
+            num_samples: settings.samples_per_pixel,
+            max_bounces: settings.max_bounces,
+            num_objects: world.num_objects()
+        }
+    }
+}
+
+pub struct NaiveMultiThreadScheduler {
+    num_threads: u32,
+}
+
+impl NaiveMultiThreadScheduler {
+    pub fn new(num_threads: u32) -> Self {
+        NaiveMultiThreadScheduler { num_threads: num_threads }
+    }
+}
+
+impl Scheduler for NaiveMultiThreadScheduler {
     fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
         // Should probably have a more user friendly way to set the number of threads at some point.
-        let num_threads = settings.thread_count;
+        let num_threads = self.num_threads;
         // Attempt to get a somewhat accurate estimate of the total render time here.
         // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
         let estimate_settings = RenderSettings{

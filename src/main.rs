@@ -13,7 +13,7 @@ use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
 use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
 use math::util::Interval;
 
-use crate::tracer::render::{NaiveScheduler, Scheduler};
+use crate::tracer::render::{NaiveMultiThreadScheduler, Scheduler};
 
 // Scatter spheres on a plane
 fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
@@ -52,7 +52,6 @@ fn main() {
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 10000.0),
-        thread_count: 3,
     };
     let camera = Camera::new(pose, lens);
 
@@ -77,7 +76,7 @@ fn main() {
     world.push(sphere3);
     world.push(sphere4);
    
-    let render_result = NaiveScheduler::default().render(camera, settings, &world);
+    let render_result = NaiveMultiThreadScheduler::new(3).render(camera, settings, &world);
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
