@@ -1,7 +1,7 @@
 use rand::distr::Distribution;
 use rand::Rng;
 
-use crate::math::vector::{Vec3f, Color, vec3};
+use crate::math::vector::{Vec3f, Color, vec3, Float};
 use crate::math::util;
 use crate::math::ray::Ray;
 use super::hittable::HitRecord;
@@ -128,7 +128,7 @@ impl MaterialTrait for MatBounceDebug {
         let color = if hit.num_bounces >= self.limit {
             COLOR_RED
         } else {   
-            let t = hit.num_bounces as f32 / self.limit as f32;
+            let t = hit.num_bounces as Float / self.limit as Float;
             COLOR_LOW.lerp(COLOR_HIGH, t)
         };
 
@@ -147,7 +147,7 @@ pub struct MatLambertDiffuse {
 }
 
 impl MatLambertDiffuse {
-    pub fn new(c: Color, _refl: f32) -> Material {
+    pub fn new(c: Color, _refl: Float) -> Material {
         Material::MatLambertDiffuse(MatLambertDiffuse { albedo: c })
     }
 }
@@ -178,17 +178,17 @@ fn vec_reflect(v_norm: &Vec3f, n_norm: &Vec3f) -> Vec3f {
     *v_norm - (*n_norm * 2.0 * v_norm.dot(*n_norm))
 }
 
-fn vec_refract(v: &Vec3f, n: &Vec3f, etai_over_etat: f32) -> Vec3f {
-    let cos_theta = f32::min(-v.dot(*n), 1.0);
+fn vec_refract(v: &Vec3f, n: &Vec3f, etai_over_etat: Float) -> Vec3f {
+    let cos_theta = Float::min(-v.dot(*n), 1.0);
     let r_out_perp =  (*v + (*n * cos_theta)) * etai_over_etat;
     let r_out_parallel = *n * (-(1.0 - r_out_perp.length_squared()).abs().sqrt());
     r_out_perp + r_out_parallel
 }
 
-fn schlick_approx(cos_theta: f32, ior: f32) -> f32 {
+fn schlick_approx(cos_theta: Float, ior: Float) -> Float {
     let r0_root = (1.0 - ior) / (1.0 + ior);
     let r0 = r0_root * r0_root;
-    let fac = 1.0 - f32::cos(cos_theta);
+    let fac = 1.0 - Float::cos(cos_theta);
     let fac5 = fac * fac * fac * fac * fac;
 
     r0 + (1.0 - r0) * fac5
@@ -197,8 +197,8 @@ fn schlick_approx(cos_theta: f32, ior: f32) -> f32 {
 #[derive(Default, Clone)]
 pub struct MatPrincipled {
     albedo: Color,
-    reflectiveness: f32,
-    gloss_fuzz: f32,
+    reflectiveness: Float,
+    gloss_fuzz: Float,
 }
 
 impl MaterialTrait for MatPrincipled {
@@ -235,7 +235,7 @@ impl MaterialTrait for MatPrincipled {
 }
 
 impl MatPrincipled {
-    pub fn new(c: Color, refl: f32, fuzz: f32) -> Material {
+    pub fn new(c: Color, refl: Float, fuzz: Float) -> Material {
         Material::MatPrincipled(MatPrincipled {
             albedo: c,
             reflectiveness: num::clamp(refl, 0.0, 1.0),
@@ -247,7 +247,7 @@ impl MatPrincipled {
 #[derive(Default, Clone)]
 pub struct MatEmission {
     color: Color,
-    strength: f32,
+    strength: Float,
 }
 
 impl MaterialTrait for MatEmission {
@@ -269,7 +269,7 @@ impl MaterialTrait for MatEmission {
 }
 
 impl MatEmission {
-    pub fn new(c: Color, strength: f32) -> Material {
+    pub fn new(c: Color, strength: Float) -> Material {
         Material::MatEmission(MatEmission {
             color: c,
             strength,
@@ -280,7 +280,7 @@ impl MatEmission {
 #[derive(Default, Clone)]
 pub struct MatGlass {
     color: Color,
-    ior: f32,
+    ior: Float,
 }
 
 impl MaterialTrait for MatGlass {
@@ -290,7 +290,7 @@ impl MaterialTrait for MatGlass {
         // Compute the relative index of refraction (ior) depending on whether the ray is entering or exiting the material.
         let ior_rel = if hit.front_face { 1.0 / self.ior } else { self.ior };
         // Calculate the cosine of the angle between the incoming ray and the surface normal.
-        let cos_theta = f32::min(-unit_direction.dot(hit.normal), 1.0);
+        let cos_theta = Float::min(-unit_direction.dot(hit.normal), 1.0);
         // Calculate the sine of the angle using the Pythagorean identity.
         let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
         // Determine if total internal reflection occurs (i.e., refraction is not possible).
@@ -321,7 +321,7 @@ impl MaterialTrait for MatGlass {
 }
 
 impl MatGlass {
-    pub fn new(c: Color, ior: f32) -> Material {
+    pub fn new(c: Color, ior: Float) -> Material {
         Material::MatGlass(MatGlass{
             color: c,
             ior: ior,

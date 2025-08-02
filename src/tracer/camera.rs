@@ -1,6 +1,5 @@
 use crate::math::ray::Ray;
-use crate::math::vector::{Vec3f, project_onto_plane_normalized};
-use core::f32;
+use crate::math::vector::{Vec3f, project_onto_plane_normalized, Float};
 
 #[derive(Clone)]
 // A viewport describes the focus plane of a camera.
@@ -8,12 +7,12 @@ pub struct Viewport {
     pub viewdown: Vec3f,
     pub viewright: Vec3f,
     pub topleft: Vec3f,
-    pub width: f32,
-    pub height: f32,
+    pub width: Float,
+    pub height: Float,
 }
 
 impl Viewport {
-    pub fn new(center: Vec3f, dir: Vec3f, up: Vec3f, height: f32, aspect_ratio: f32) -> Self {
+    pub fn new(center: Vec3f, dir: Vec3f, up: Vec3f, height: Float, aspect_ratio: Float) -> Self {
         let width = height * aspect_ratio;
 
         let down_dir_norm = -up.normalize();
@@ -30,7 +29,7 @@ impl Viewport {
     }
 
     // Shoot a ray at the given uv of the viewport from a point origin (which is presumably the camera position).
-    pub fn ray_at_uv(&self, u: f32, v: f32, origin: Vec3f) -> Ray {
+    pub fn ray_at_uv(&self, u: Float, v: Float, origin: Vec3f) -> Ray {
         let target = self.topleft + self.viewright * u * self.width 
                    + self.viewdown * v * self.height;
         let dir = (target - origin).normalize();
@@ -42,23 +41,23 @@ impl Viewport {
 
 #[derive(Clone)]
 pub struct Lens {
-    pub focal_length: f32,
-    pub sensor_width: f32,
-    pub afov_rad: f32,
-    pub aspect_ratio: f32,
+    pub focal_length: Float,
+    pub sensor_width: Float,
+    pub afov_rad: Float,
+    pub aspect_ratio: Float,
 
     // Distance from the camera to the focus plane
-    pub focal_distance: f32,
+    pub focal_distance: Float,
     // Amount of depth of field 
-    pub dof: f32, 
+    pub dof: Float, 
 }
 
 impl Lens {
-    pub fn new(sensor_width_mm: u32, focal_length_mm: u32, aspect_ratio: f32, focal_distance: f32, dof: f32) -> Self {
-        let sensor_width = sensor_width_mm as f32 / 1000.0;
-        let focal_length = focal_length_mm as f32 / 1000.0;
+    pub fn new(sensor_width_mm: u32, focal_length_mm: u32, aspect_ratio: Float, focal_distance: Float, dof: Float) -> Self {
+        let sensor_width = sensor_width_mm as Float / 1000.0;
+        let focal_length = focal_length_mm as Float / 1000.0;
         let sensor_height = sensor_width / aspect_ratio;
-        let afov_rad = 2.0 * f32::atan(sensor_height / (2.0 * focal_length));
+        let afov_rad = 2.0 * Float::atan(sensor_height / (2.0 * focal_length));
 
         Lens {
             focal_length: focal_length,
@@ -113,7 +112,7 @@ impl Camera {
         let viewport_center = pose.position + pose.direction * lens.focal_distance;
         let dir  = pose.direction;
 
-        let height = 2.0 * lens.focal_distance * f32::tan(lens.afov_rad * 0.5);
+        let height = 2.0 * lens.focal_distance * Float::tan(lens.afov_rad * 0.5);
 
         let aspect_ratio = lens.aspect_ratio;
 

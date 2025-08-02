@@ -5,9 +5,7 @@ mod math;
 mod io;
 mod tracer;
 
-use std::f32::consts::PI;
-
-use math::vector::{Vec3f, vec3};
+use math::vector::{Vec3f, vec3, Float};
 use tracer::camera::{self, Camera};
 use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
 use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
@@ -16,15 +14,15 @@ use math::util::Interval;
 use crate::tracer::render::{NaiveMultiThreadScheduler, NaiveSingleThreadScheduler, Scheduler, TiledScheduler};
 
 // Scatter spheres on a plane
-fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
+fn scatter_spheres(world: &mut HittableList, count: u32, height: Float, scatter_radius: Float, sphere_radius: (Float, Float)) {
     for _ in 0..count {
         // Make it so the spheres "sit" on the given plane height
         let radius = math::util::rand_range_f(sphere_radius.0, sphere_radius.1);
         let height = height + radius;
 
-        let angle = math::util::rand_range_f(0.0, 2.0 * PI);
+        let angle = math::util::rand_range_f(0.0, 2.0 * std::f64::consts::PI as Float);
         let distance = math::util::rand_range_f(0.0, 1.0).sqrt() * scatter_radius;
-        let (x, y) = (f32::cos(angle) * distance, f32::sin(angle) * distance); 
+        let (x, y) = (Float::cos(angle) * distance, Float::sin(angle) * distance); 
         let center = Vec3f::new(x, height, y);
         let material = Material::random_instance();
         let sphere = Sphere::new(center, radius, material);
@@ -36,7 +34,7 @@ fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_ra
 fn main() {
     let width: u32  = 1280 / 4;
     let height: u32 = 1024 / 4;
-    let aspect_ratio: f32 = width as f32 / height as f32;
+    let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(-10.3, 0.6, 8.9), 
                                             Vec3f::new(0.0, 0.6, -0.1));

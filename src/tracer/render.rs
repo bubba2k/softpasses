@@ -5,7 +5,7 @@ use rayon::prelude::*;
 use crate::tracer::camera::{Camera, };
 use crate::tracer::hittable::{HittableList, HittableTrait};
 use crate::math::util::{ImageRegion, self};
-use crate::math::vector::{Color, Pixel, Vec3f};
+use crate::math::vector::{Color, Pixel, Vec3f, Float};
 use super::material::{MaterialTrait};
 use crate::math::ray::Ray;
 
@@ -86,12 +86,12 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &HittableList, _bou
 // Render a specific region of the image.
 pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList, region: util::ImageRegion) -> Vec<Color> {
     let mut colors: Vec<Color> = Vec::new();
-    let offset_range = 1.0 / settings.image_height as f32;
+    let offset_range = 1.0 / settings.image_height as Float;
 
     for y in region.y.0..region.y.1 {
         for x in region.x.0..region.x.1 {
-            let u = x as  f32 / settings.image_width as f32;
-            let v = y as f32 / settings.image_height as f32;
+            let u = x as  Float / settings.image_width as Float;
+            let v = y as Float / settings.image_height as Float;
             let mut color: Color = Color::default();
             // Perform multisampling here.
             for _ in 0..settings.samples_per_pixel {
@@ -106,7 +106,7 @@ pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList,
                                           + cam.viewport.viewdown * blur_offset.y 
                                           + cam.viewport.viewright * blur_offset.x;
                 let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
-                color += trace_ray(&ray, &settings, &world, 0) * (1.0 / settings.samples_per_pixel as f32);
+                color += trace_ray(&ray, &settings, &world, 0) * (1.0 / settings.samples_per_pixel as Float);
             }
             colors.push(color);
         }
@@ -126,9 +126,9 @@ fn estimate_render_time(camera: &Camera, world: &HittableList, settings: &Render
     render_region(camera.clone(), estimate_settings, world.clone(), region.clone());
     // It seems a bit impossible to estimate how much the number of threads actually influences
     // the render time. Assume half for more than 1. Thats it uhhh
-    let estimate_duration = estimate_start.elapsed().as_secs_f32()
-                               * settings.samples_per_pixel as f32  // Attenuate for actual spp value
-                               * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
+    let estimate_duration = estimate_start.elapsed().as_secs_f64() as Float
+                               * settings.samples_per_pixel as Float  // Attenuate for actual spp value
+                               * (1.0 / num_threads.clamp(1, 2) as Float); // Attenuate for thread count
     let estimate_minutes = estimate_duration as u32 / 60;
     let estimate_seconds = estimate_duration as u32 % 60;
     let now = chrono::Local::now();
@@ -140,7 +140,7 @@ fn background_color(dir: Vec3f) -> Color {
     // as a unitsphere, with the camera at the center. That way we can determine the backgrounds
     // color simply by what direction we are looking in.
     // For now, it is a simple gradient along the y axis.
-    const BRIGHTNESS: f32 = 1.0;
+    const BRIGHTNESS: Float = 1.0;
     const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
     const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
     let a = (dir.normalize().y + 1.0) * 0.5;
@@ -166,7 +166,7 @@ pub struct RenderSettings {
 
 pub struct RenderResult {
     pub pixels: Vec<Pixel>,
-    pub time_elapsed: f32,
+    pub time_elapsed: Float,
 
     pub image_height: u32,
     pub image_width: u32,
@@ -209,7 +209,7 @@ impl Scheduler for NaiveSingleThreadScheduler {
 
         RenderResult { 
             pixels: image_pixels, 
-            time_elapsed: start.elapsed().as_secs_f32(),
+            time_elapsed: start.elapsed().as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
@@ -262,7 +262,7 @@ impl Scheduler for NaiveMultiThreadScheduler {
             images.push(image);
         }
         // Perform weighted sum of all generated images.
-        let weight = 1.0 / num_threads as f32;
+        let weight = 1.0 / num_threads as Float;
         let len = images[0].len();
         // Sum all the images up...
         let mut result = vec![Color::new(0.0, 0.0, 0.0); len];
@@ -280,7 +280,7 @@ impl Scheduler for NaiveMultiThreadScheduler {
         eprintln!("Done in {:?} with {} threads.", duration, num_threads);
         RenderResult {
             pixels: pixels,
-            time_elapsed: duration.as_secs_f32(),
+            time_elapsed: duration.as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
@@ -362,7 +362,7 @@ impl Scheduler for TiledScheduler {
             .collect();
 
         RenderResult {  pixels: pixels, 
-                        time_elapsed: begin.elapsed().as_secs_f32(),
+                        time_elapsed: begin.elapsed().as_secs_f64() as Float,
                         image_height: settings.image_height,
                         image_width: settings.image_width,
                         num_samples: settings.samples_per_pixel,

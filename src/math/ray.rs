@@ -1,6 +1,4 @@
-use core::f32;
-
-use crate::Vec3f;
+use crate::math::vector::{Vec3f, Float};
 
 #[derive(Debug, Clone)]
 pub struct Ray {
@@ -14,11 +12,11 @@ impl Ray {
         Ray { orig: origin.clone(), dir: dir.clone() }
     }
 
-    pub fn at(&self, t: f32) -> Vec3f {
+    pub fn at(&self, t: Float) -> Vec3f {
         self.orig + (self.dir * t)
     }
 
-    pub fn step(&self, fac: f32) -> Self {
+    pub fn step(&self, fac: Float) -> Self {
         Ray {
             orig: self.orig + (self.dir) * fac,
             dir: self.dir,

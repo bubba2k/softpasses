@@ -1,21 +1,19 @@
 use super::material::Material;
 use crate::math::ray::{Ray};
-use crate::math::vector::{self, project_onto_plane_normalized, CoordinatePlane, Vec3f};
+use crate::math::vector::{self, project_onto_plane_normalized, CoordinatePlane, Vec3f, Float};
 use crate::math::util::Interval;
-
-use core::f32;
 
 pub struct HitRecord<'a> {
     pub point: Vec3f,
     pub normal: Vec3f,
     pub num_bounces: u32, // How many times the ray has bounced so far
     pub material: &'a Material,
-    pub t: f32,
+    pub t: Float,
     pub front_face: bool, // True if ray hit the front of a face/surface. False if ray is on inside
 }
 
 impl<'a> HitRecord<'a> {
-    pub fn new(ray: &Ray, t_hit: f32, point_hit: Vec3f, num_bounces: u32, obj_mat: &'a Material, obj_normal: Vec3f) -> Self {
+    pub fn new(ray: &Ray, t_hit: Float, point_hit: Vec3f, num_bounces: u32, obj_mat: &'a Material, obj_normal: Vec3f) -> Self {
         // Check whether we hit the inside or outside
         if ray.dir.dot(obj_normal) > 0.0 {
             // Hit the "inside" of object. Flip the normal!
@@ -53,7 +51,7 @@ pub trait HittableTrait {
 }
 
 // Helper: Get the t parameter at which a sphere is struck.
-fn hit_sphere(ray: &Ray, center: &Vec3f, radius: f32) -> Option<f32> {
+fn hit_sphere(ray: &Ray, center: &Vec3f, radius: Float) -> Option<Float> {
     let oc = *center - ray.orig;
     let a = ray.dir.length_squared(); // A vector dotted with itself == its length squared
     let b = -2.0 * ray.dir.dot(oc);
@@ -202,12 +200,12 @@ impl HittableTrait for HittableList {
 #[derive(Clone)]
 pub struct Sphere {
     pub center: Vec3f,
-    pub radius: f32,
+    pub radius: Float,
     pub material: Material,
 }
 
 impl Sphere {
-    pub fn new(c: Vec3f, r: f32, material: Material) -> Hittable {
+    pub fn new(c: Vec3f, r: Float, material: Material) -> Hittable {
         Hittable::Sphere(Sphere {
             center: c,
             radius: r,
@@ -248,12 +246,12 @@ impl HittableTrait for Sphere {
 pub struct Plane {
     // The plane in HNF
     normal: Vec3f,
-    d: f32,    // Distance from origin
+    d: Float,    // Distance from origin
     material: Material,
 }
 
 impl Plane {
-    pub fn new(normal: Vec3f, d: f32, mat: Material) -> Hittable {
+    pub fn new(normal: Vec3f, d: Float, mat: Material) -> Hittable {
         Hittable::Plane(Plane {
             normal: normal,
             d: d,
@@ -307,8 +305,8 @@ impl HittableTrait for Plane {
     }
 
     fn get_aabb(&self) -> AABoundingBox {
-        AABoundingBox { min: Vec3f::new(-f32::INFINITY, -f32::INFINITY, -f32::INFINITY),
-                        max: Vec3f::new(f32::INFINITY, f32::INFINITY, f32::INFINITY) }
+        AABoundingBox { min: Vec3f::new(-Float::INFINITY, -Float::INFINITY, -Float::INFINITY),
+                        max: Vec3f::new(Float::INFINITY, Float::INFINITY, Float::INFINITY) }
     }
 }
 
@@ -316,7 +314,7 @@ impl HittableTrait for Plane {
 pub struct Parallelogram {
     // The plane the rectangle lies on in HNF
     normal: Vec3f,
-    d: f32,    
+    d: Float,    
     
     // The rectangles 4 corners (on the projection plane) point in CCW order
     projected_bounds: [Vec3f;4],
@@ -520,7 +518,7 @@ impl Parallelepiped {
         Hittable::Parallelepiped(Self::_new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material))
     }
  
-    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32, material: Material) -> Hittable {
+    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: Float, material: Material) -> Hittable {
         let depth_dir = up_dir.cross(right_dir).normalize();
 
         let back_bottom_left = front_bottom_left + depth_dir * size;

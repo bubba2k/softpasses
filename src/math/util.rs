@@ -1,35 +1,35 @@
-use crate::math::vector::Vec3f;
+use crate::math::vector::{Vec3f, Float};
 
 #[derive(Clone, Copy)]
 pub struct Interval {
-    pub min: f32,
-    pub max: f32,
+    pub min: Float,
+    pub max: Float,
 }
 
 impl Interval {
-    pub const EMPTY:    Self = Interval { min: f32::INFINITY, max: f32::NEG_INFINITY };
-    pub const UNIVERSE: Self = Interval { min: f32::NEG_INFINITY, max: f32::INFINITY };
+    pub const EMPTY:    Self = Interval { min: Float::INFINITY, max: Float::NEG_INFINITY };
+    pub const UNIVERSE: Self = Interval { min: Float::NEG_INFINITY, max: Float::INFINITY };
 
-    pub fn new(min: f32, max: f32) -> Self {
+    pub fn new(min: Float, max: Float) -> Self {
         Interval {
             min: min,
             max: max,
         }
     }
 
-    pub fn size(&self) -> f32 {
+    pub fn size(&self) -> Float {
         self.max - self.min
     }
 
-    pub fn contains(&self, x: f32) -> bool {
+    pub fn contains(&self, x: Float) -> bool {
         self.min <= x && x <= self.max
     }
 
-    pub fn surrounds(&self, x: f32) -> bool {
+    pub fn surrounds(&self, x: Float) -> bool {
         self.min < x && x < self.max
     }
 
-    pub fn clamp(&self, x: f32) -> f32 {
+    pub fn clamp(&self, x: Float) -> Float {
         num::clamp(x, self.min, self.max)
     }
 }
@@ -53,15 +53,15 @@ impl ImageRegion {
     }
 }
 
-pub fn linear_to_gamma(linear_component: f32) -> f32 {
+pub fn linear_to_gamma(linear_component: Float) -> Float {
     num::clamp(linear_component, 0.0, 1.0).sqrt()
 }
 
-pub fn rand_range_f(low: f32, high: f32) -> f32 {
-    fastrand::f32() * (high - low) + low
+pub fn rand_range_f(low: Float, high: Float) -> Float {
+    fastrand::f32() as Float * (high - low) + low
 }
 
-pub fn rand_vec3_range(min: f32, max: f32) -> Vec3f {
+pub fn rand_vec3_range(min: Float, max: Float) -> Vec3f {
     Vec3f::new( rand_range_f(min, max), 
                 rand_range_f(min, max), 
                 rand_range_f(min, max),
@@ -101,6 +101,6 @@ pub fn rand_unit_vec_on_hemisphere(normal: &Vec3f) -> Vec3f {
     }
 }
 
-pub fn rand_bool(p: f32) -> bool {
-    fastrand::f32() < p
+pub fn rand_bool(p: Float) -> bool {
+    (fastrand::f32() as Float) < p
 }
