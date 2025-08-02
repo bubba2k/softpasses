@@ -32,8 +32,8 @@ fn scatter_spheres(world: &mut HittableList, count: u32, height: Float, scatter_
 }
 
 fn main() {
-    let width: u32  = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32  = 1280 / 2;
+    let height: u32 = 1024 / 2;
     let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(-10.3, 0.6, 8.9), 
@@ -45,7 +45,7 @@ fn main() {
         3.44,
     0.0);
     let settings = tracer::render::RenderSettings {
-        samples_per_pixel: 500,
+        samples_per_pixel: 100,
         max_bounces: 10,
         image_width: width,
         image_height: height,

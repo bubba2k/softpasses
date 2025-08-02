@@ -161,9 +161,8 @@ impl MaterialTrait for MatLambertDiffuse {
         // Those can occur if the generated random vector is parallel but opposite direction
         // of the hit normal.
         // We do not do that here though, because it caused weird bugs, somehow.
-        let light_attenuation = hit.normal.dot(new_dir);
         let new_ray = Ray::new(&hit.point, &new_dir);
-        (Some(new_ray), Some(self.albedo.clone() * light_attenuation))
+        (Some(new_ray), Some(self.albedo))
     }
 
     fn random_instance() -> Self {
