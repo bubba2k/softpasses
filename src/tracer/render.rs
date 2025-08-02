@@ -6,15 +6,16 @@ use crate::tracer::camera::{Camera, };
 use crate::tracer::hittable::{HittableList, HittableTrait};
 use crate::math::util::{ImageRegion, self};
 use crate::math::vector::{Color, Pixel, Vec3f, Float};
+use crate::tracer::world::World;
 use super::material::{MaterialTrait};
 use crate::math::ray::Ray;
 
-fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &HittableList, bounce: u32) -> Color {
+fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Abort if max bounce is reached.
     if bounce == settings.max_bounces { return COLOR_BLACK; }
     // Fire the ray. See if it hits anything.
-    if let Some(hit) = world.try_hit(ray, settings.ray_limits, bounce) {
+    if let Some(hit) = world.objects.try_hit(ray, settings.ray_limits, bounce) {
         match hit.material.scatter(ray, &hit) {
             (Some(scatter_ray), Some(color_att)) => {
                 // Fire the reflected/scattered ray we got from the material and surface information.
@@ -37,11 +38,11 @@ fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &HittableList, bounce:
         }
     } else {
        // The ray did not hit anything. Return the background color.
-       background_color(ray.dir)
+       world.background.sample(ray.dir)
     }
 }
 
-fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &HittableList, _bounce: u32) -> Color {
+fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
     let mut current_ray: Ray = ray.clone();
@@ -52,7 +53,7 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &HittableList, _bou
             return COLOR_BLACK;
         }        
         // Fire the ray. See if it hits anything.
-        if let Some(hit) = world.try_hit(&current_ray, settings.ray_limits, bounce_counter) {
+        if let Some(hit) = world.objects.try_hit(&current_ray, settings.ray_limits, bounce_counter) {
             match hit.material.scatter(&current_ray, &hit) {
                 (Some(scatter_ray), Some(color_att)) => {
                     // Fire the reflected/scattered ray we got from the material and surface information.
@@ -77,14 +78,14 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &HittableList, _bou
             }
         } else {
             // If the ray did not hit objects, we assume it hit the background / sky.
-            return ray_color * background_color(current_ray.dir);
+            return ray_color * world.background.sample(current_ray.dir);
         }
         bounce_counter = bounce_counter + 1;
     }
 }
 
 // Render a specific region of the image.
-pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList, region: util::ImageRegion) -> Vec<Color> {
+pub fn render_region(cam: Camera, settings: RenderSettings, world: World, region: util::ImageRegion) -> Vec<Color> {
     let mut colors: Vec<Color> = Vec::new();
     let offset_range = 1.0 / settings.image_height as Float;
 
@@ -114,7 +115,7 @@ pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList,
     colors
 }
 
-fn estimate_render_time(camera: &Camera, world: &HittableList, settings: &RenderSettings, num_threads: u32) {
+fn estimate_render_time(camera: &Camera, world: &World, settings: &RenderSettings, num_threads: u32) {
     // Attempt to get a somewhat accurate estimate of the total render time here.
     // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
     let estimate_settings = RenderSettings{
@@ -133,19 +134,6 @@ fn estimate_render_time(camera: &Camera, world: &HittableList, settings: &Render
     let estimate_seconds = estimate_duration as u32 % 60;
     let now = chrono::Local::now();
     eprintln!("Started at {}\nEst. render time: {:02}:{:02}", now.format("%H:%M:%S"), estimate_minutes, estimate_seconds);
-}
-
-fn background_color(dir: Vec3f) -> Color {
-    // Compute the background color in the given direction. Basically we think of the environment
-    // as a unitsphere, with the camera at the center. That way we can determine the backgrounds
-    // color simply by what direction we are looking in.
-    // For now, it is a simple gradient along the y axis.
-    const BRIGHTNESS: Float = 1.0;
-    const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
-    const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
-    let a = (dir.normalize().y + 1.0) * 0.5;
-    let lerped_color = COLOR_B * (1.0 - a) + COLOR_A * a;
-    lerped_color * BRIGHTNESS
 }
 
 fn color_to_pixel(c: &Color) -> Pixel {
@@ -184,7 +172,7 @@ impl std::fmt::Display for RenderResult {
 }
 
 pub trait Scheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult;
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult;
 }
 
 #[derive(Default)]
@@ -197,7 +185,7 @@ impl NaiveSingleThreadScheduler {
 }
 
 impl Scheduler for NaiveSingleThreadScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
         estimate_render_time(&camera, world, &settings, 1);
 
         let start = Instant::now();
@@ -214,7 +202,7 @@ impl Scheduler for NaiveSingleThreadScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.num_objects()
+            num_objects: world.objects.num_objects()
         }
     }
 }
@@ -230,7 +218,7 @@ impl NaiveMultiThreadScheduler {
 }
 
 impl Scheduler for NaiveMultiThreadScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
         // Should probably have a more user friendly way to set the number of threads at some point.
         let num_threads = self.num_threads;
         let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
@@ -285,7 +273,7 @@ impl Scheduler for NaiveMultiThreadScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.num_objects(),
+            num_objects: world.objects.num_objects(),
         }
     }
 }
@@ -301,7 +289,7 @@ impl TiledScheduler {
 }
 
 impl Scheduler for TiledScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
         // Rougly estimate render time here
         estimate_render_time(&camera, world, &settings, 2);
 
@@ -367,7 +355,7 @@ impl Scheduler for TiledScheduler {
                         image_width: settings.image_width,
                         num_samples: settings.samples_per_pixel,
                         max_bounces: settings.max_bounces,
-                        num_objects: world.num_objects(), 
+                        num_objects: world.objects.num_objects(), 
         }
     }
 }
