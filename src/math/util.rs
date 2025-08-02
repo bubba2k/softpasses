@@ -94,7 +94,7 @@ pub fn rand_vec_on_unit_disc() -> Vec3f {
 
 pub fn rand_unit_vec_on_hemisphere(normal: &Vec3f) -> Vec3f {
     let rnd_vec = rand_unit_vec();
-    if rnd_vec.dot(normal) > 0.0 {
+    if rnd_vec.dot(*normal) > 0.0 {
         rnd_vec
     } else {
         -rnd_vec

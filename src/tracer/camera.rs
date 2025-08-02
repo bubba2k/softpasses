@@ -1,5 +1,5 @@
 use crate::math::ray::Ray;
-use crate::math::vector::Vec3f;
+use crate::math::vector::{Vec3f, project_onto_plane_normalized};
 use core::f32;
 
 #[derive(Clone)]
@@ -17,7 +17,7 @@ impl Viewport {
         let width = height * aspect_ratio;
 
         let down_dir_norm = -up.normalize();
-        let right_dir_norm = dir.cross(&up.normalize()).normalize();
+        let right_dir_norm = dir.cross(up.normalize()).normalize();
 
         let top_left = center + (-down_dir_norm * height * 0.5) + (-right_dir_norm * width * 0.5);
 
@@ -121,7 +121,7 @@ impl Camera {
         let view_up = pose.up;
 
         // Project the view_up onto the viewport plane to get the actual viewport up
-        let viewport_up = view_up.proj_plane(&dir).normalize();
+        let viewport_up = project_onto_plane_normalized(view_up, dir).normalize();
 
         let viewport = Viewport::new(viewport_center, dir, viewport_up, height, aspect_ratio);
 

@@ -103,8 +103,8 @@ pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList,
                 // TODO: Make it so the DOF parameter describes the *actual* depth of field
                 let blur_offset = util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
                 let ray_origin = cam.pose.position
-                                          + cam.viewport.viewdown * blur_offset.y() 
-                                          + cam.viewport.viewright * blur_offset.x();
+                                          + cam.viewport.viewdown * blur_offset.y 
+                                          + cam.viewport.viewright * blur_offset.x;
                 let ray = cam.viewport.ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
                 color += trace_ray(&ray, &settings, &world, 0) * (1.0 / settings.samples_per_pixel as f32);
             }
@@ -143,15 +143,15 @@ fn background_color(dir: Vec3f) -> Color {
     const BRIGHTNESS: f32 = 1.0;
     const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
     const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
-    let a = (dir.normalize().y() + 1.0) * 0.5;
+    let a = (dir.normalize().y + 1.0) * 0.5;
     let lerped_color = COLOR_B * (1.0 - a) + COLOR_A * a;
     lerped_color * BRIGHTNESS
 }
 
 fn color_to_pixel(c: &Color) -> Pixel {
-    let r = util::linear_to_gamma(c.r());
-    let g = util::linear_to_gamma(c.g());
-    let b = util::linear_to_gamma(c.b());
+    let r = util::linear_to_gamma(c[0]);
+    let g = util::linear_to_gamma(c[1]);
+    let b = util::linear_to_gamma(c[2]);
     crate::math::vector::Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
 }
 

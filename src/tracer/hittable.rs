@@ -1,6 +1,6 @@
 use super::material::Material;
 use crate::math::ray::{Ray};
-use crate::math::vector::{self, Vec3f, CoordinatePlane};
+use crate::math::vector::{self, project_onto_plane_normalized, CoordinatePlane, Vec3f};
 use crate::math::util::Interval;
 
 use core::f32;
@@ -17,7 +17,7 @@ pub struct HitRecord<'a> {
 impl<'a> HitRecord<'a> {
     pub fn new(ray: &Ray, t_hit: f32, point_hit: Vec3f, num_bounces: u32, obj_mat: &'a Material, obj_normal: Vec3f) -> Self {
         // Check whether we hit the inside or outside
-        if ray.dir.dot(&obj_normal) > 0.0 {
+        if ray.dir.dot(obj_normal) > 0.0 {
             // Hit the "inside" of object. Flip the normal!
             HitRecord {
                 point: point_hit,
@@ -56,7 +56,7 @@ pub trait HittableTrait {
 fn hit_sphere(ray: &Ray, center: &Vec3f, radius: f32) -> Option<f32> {
     let oc = *center - ray.orig;
     let a = ray.dir.length_squared(); // A vector dotted with itself == its length squared
-    let b = -2.0 * ray.dir.dot(&oc);
+    let b = -2.0 * ray.dir.dot(oc);
     let c = oc.length_squared() - radius * radius;
     let discriminant = b * b - 4.0 * a * c;
     if discriminant >= 0.0 {
@@ -126,14 +126,14 @@ impl AABoundingBox {
     // Expand bounding box to a given point, if necessary
     pub fn expand(&mut self, point: &Vec3f) {
         self.min = Vec3f::new(
-            self.min.x().min(point.x()),
-            self.min.y().min(point.y()),
-            self.min.z().min(point.z()),
+            self.min.x.min(point.x),
+            self.min.y.min(point.y),
+            self.min.z.min(point.z),
         );
         self.max = Vec3f::new(
-            self.max.x().max(point.x()),
-            self.max.y().max(point.y()),
-            self.max.z().max(point.z()),
+            self.max.x.max(point.x),
+            self.max.y.max(point.y),
+            self.max.z.max(point.z),
         );
     }
 
@@ -265,12 +265,12 @@ impl Plane {
         let right = botright - botleft;
         let up = topleft - botleft;
         
-        let normal = right.cross(&up).normalize();
-        let distance = (botleft.proj_plane(&normal) - botleft).length();
+        let normal = right.cross(up).normalize();
+        let distance = (project_onto_plane_normalized(botleft, normal) - botleft).length();
 
         // The plane is in HNF, so we want the plane normal to point away from the CS origin.
         // That means we might have to negate distance:
-        let signed_distance = if normal.dot(&botleft) >= 0.0 {
+        let signed_distance = if normal.dot(botleft) >= 0.0 {
             distance
         } else {
             -distance
@@ -287,11 +287,11 @@ impl Plane {
 impl HittableTrait for Plane {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if parallel
-        if self.normal.dot(&ray.dir) == 0.0 {
+        if self.normal.dot(ray.dir) == 0.0 {
             return None;
         }
 
-        let t_intersect = (-self.normal.dot(&ray.orig) + self.d) / self.normal.dot(&ray.dir);
+        let t_intersect = (-self.normal.dot(ray.orig) + self.d) / self.normal.dot(ray.dir);
 
         if !t_interval.contains(t_intersect) {
             return None;
@@ -333,10 +333,10 @@ impl Parallelogram {
         let up = top_left - bottom_left;
         let right = bottom_right - bottom_left;
 
-        let normal = right.cross(&up).normalize();
-        let distance = (bottom_left.proj_plane(&normal) - bottom_left).length();
+        let normal = right.cross(up).normalize();
+        let distance = (project_onto_plane_normalized(bottom_left,  normal) - bottom_left).length();
 
-        let signed_distance = if normal.dot(&bottom_left) >= 0.0 {
+        let signed_distance = if normal.dot(bottom_left) >= 0.0 {
             distance
         } else {
             -distance
@@ -345,7 +345,7 @@ impl Parallelogram {
         // Find the coordinate plane "most parallel" to the rect plane, but most importantly, also avoid any orthogonal ones.
         let projection_plane = [CoordinatePlane::XY, CoordinatePlane::XZ, CoordinatePlane::YZ]
             .map(|p| (p, p.normal())).iter()
-            .max_by(|a, b| a.1.dot(&normal).abs().total_cmp(&b.1.dot(&normal).abs()))
+            .max_by(|a, b| a.1.dot(normal).abs().total_cmp(&b.1.dot(normal).abs()))
             .map(|x| x.0).unwrap();
 
         let projected_bounds = 
@@ -356,7 +356,7 @@ impl Parallelogram {
                 let projected_topleft = top_left;
                 let projected_topright = bottom_right + up;
 
-                if vector::PLANE_XY.dot(&normal) > 0.0 {
+                if vector::PLANE_XY.dot(normal) > 0.0 {
                     [projected_botleft, projected_botright, projected_topright, projected_topleft]
 
                 } else {
@@ -366,13 +366,13 @@ impl Parallelogram {
             CoordinatePlane::XZ => {
                 // Project onto the XZ plane. So, drop the Y and replace it with the Z coord, since
                 // that is how the bounds checking function expects it later on.
-                let projected_botleft = Vec3f::new(bottom_left.x(), bottom_left.z(), 0.0);
-                let projected_botright = Vec3f::new(bottom_right.x(), bottom_right.z(), 0.0);
-                let projected_topleft = Vec3f::new(top_left.x(), top_left.z(), 0.0);
+                let projected_botleft = Vec3f::new(bottom_left.x, bottom_left.z, 0.0);
+                let projected_botright = Vec3f::new(bottom_right.x, bottom_right.z, 0.0);
+                let projected_topleft = Vec3f::new(top_left.x, top_left.z, 0.0);
                 let top_right = bottom_right + up;
-                let projected_topright = Vec3f::new(top_right.x(), top_right.z(), 0.0);
+                let projected_topright = Vec3f::new(top_right.x, top_right.z, 0.0);
 
-                if vector::PLANE_XZ.dot(&normal) > 0.0 {
+                if vector::PLANE_XZ.dot(normal) > 0.0 {
                     [projected_topleft, projected_topright, projected_botright, projected_botleft]
                 } else {
                     [projected_botleft, projected_botright, projected_topright, projected_topleft]
@@ -380,13 +380,13 @@ impl Parallelogram {
             },
             CoordinatePlane::YZ => {
                 // Project on XY plane. Drop X coordinate.
-                let projected_botleft = Vec3f::new(bottom_left.y(), bottom_left.z(), 0.0);
-                let projected_botright = Vec3f::new(bottom_right.y(), bottom_right.z(), 0.0);
-                let projected_topleft = Vec3f::new(top_left.y(), top_left.z(), 0.0);
+                let projected_botleft = Vec3f::new(bottom_left.y, bottom_left.z, 0.0);
+                let projected_botright = Vec3f::new(bottom_right.y, bottom_right.z, 0.0);
+                let projected_topleft = Vec3f::new(top_left.y, top_left.z, 0.0);
                 let top_right = bottom_right + up;
-                let projected_topright = Vec3f::new(top_right.y(), top_right.z(), 0.0);
+                let projected_topright = Vec3f::new(top_right.y, top_right.z, 0.0);
 
-                if vector::PLANE_YZ.dot(&normal) > 0.0 {
+                if vector::PLANE_YZ.dot(normal) > 0.0 {
                     [projected_botleft, projected_botright, projected_topright, projected_topleft]
 
                 } else {
@@ -414,11 +414,11 @@ impl HittableTrait for Parallelogram {
     //    then perform a 2D Point-Contains-Polygon Check
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if parallel
-        if self.normal.dot(&ray.dir) == 0.0 {
+        if self.normal.dot(ray.dir) == 0.0 {
             return None;
         }
 
-        let t_intersect = (-self.normal.dot(&ray.orig) + self.d) / self.normal.dot(&ray.dir);
+        let t_intersect = (-self.normal.dot(ray.orig) + self.d) / self.normal.dot(ray.dir);
 
         if !t_interval.contains(t_intersect) {
             return None;
@@ -428,8 +428,8 @@ impl HittableTrait for Parallelogram {
             // Check what coordinate plane we have to project onto.
             let projected_intersect_point = match self.projection_plane {
                 CoordinatePlane::XY => p_intersect,
-                CoordinatePlane::XZ => Vec3f::new(p_intersect.x(), p_intersect.z(), 0.0),
-                CoordinatePlane::YZ => Vec3f::new(p_intersect.y(), p_intersect.z(), 0.0),
+                CoordinatePlane::XZ => Vec3f::new(p_intersect.x, p_intersect.z, 0.0),
+                CoordinatePlane::YZ => Vec3f::new(p_intersect.y, p_intersect.z, 0.0),
             };
 
             // Check whether the point we found is inside the rectangles boundaries.
@@ -455,7 +455,7 @@ impl HittableTrait for Parallelogram {
         // distance along the normal and send them to the aabb
         let mut aabb: AABoundingBox = AABoundingBox::default();
         for p in self.projected_bounds.iter() {
-            let point = p.proj_plane(&self.normal) + self.normal * self.d;
+            let point = project_onto_plane_normalized(*p, self.normal) + self.normal * self.d;
             aabb.expand(&point);
         }
         aabb
@@ -521,7 +521,7 @@ impl Parallelepiped {
     }
  
     pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: f32, material: Material) -> Hittable {
-        let depth_dir = up_dir.cross(&right_dir).normalize();
+        let depth_dir = up_dir.cross(right_dir).normalize();
 
         let back_bottom_left = front_bottom_left + depth_dir * size;
         let back_bottom_right = back_bottom_left + right_dir.normalize() * size;

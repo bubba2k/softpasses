@@ -1,14 +1,14 @@
-use crate::math::vector::Vec3;
+use crate::math::vector::Pixel;
 
 pub fn ppm_header(width: u32, height: u32) -> String {
     format!("P3\n{} {}\n255\n", width, height)
 }
 
-pub fn ppm_pixel(p: &Vec3<u8>) -> String {
-    format!("{} {} {}\n", p.r(), p.g(), p.b())
+pub fn ppm_pixel(p: &Pixel) -> String {
+    format!("{} {} {}\n", p.x, p.y, p.z)
 }
 
-pub fn ppm_image(width: u32, height: u32, pixels: &[Vec3<u8>], comment: String) -> String {
+pub fn ppm_image(width: u32, height: u32, pixels: &[Pixel], comment: String) -> String {
     let mut image = ppm_header(width, height);
     image.push_str(&make_comment(comment));
     image.push_str("\n");

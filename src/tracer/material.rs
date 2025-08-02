@@ -1,7 +1,7 @@
 use rand::distr::Distribution;
 use rand::Rng;
 
-use crate::math::vector::{Vec3f, Color};
+use crate::math::vector::{Vec3f, Color, vec3};
 use crate::math::util;
 use crate::math::ray::Ray;
 use super::hittable::HitRecord;
@@ -129,7 +129,7 @@ impl MaterialTrait for MatBounceDebug {
             COLOR_RED
         } else {   
             let t = hit.num_bounces as f32 / self.limit as f32;
-            COLOR_LOW.lerp(&COLOR_HIGH, t)
+            COLOR_LOW.lerp(COLOR_HIGH, t)
         };
 
         (None, Some(color))
@@ -161,7 +161,7 @@ impl MaterialTrait for MatLambertDiffuse {
         // Those can occur if the generated random vector is parallel but opposite direction
         // of the hit normal.
         // We do not do that here though, because it caused weird bugs, somehow.
-        let light_attenuation = hit.normal.dot(&new_dir);
+        let light_attenuation = hit.normal.dot(new_dir);
         let new_ray = Ray::new(&hit.point, &new_dir);
         (Some(new_ray), Some(self.albedo.clone() * light_attenuation))
     }
@@ -175,11 +175,11 @@ impl MaterialTrait for MatLambertDiffuse {
 }
 
 fn vec_reflect(v_norm: &Vec3f, n_norm: &Vec3f) -> Vec3f {
-    *v_norm - (*n_norm * 2.0 * v_norm.dot(n_norm))
+    *v_norm - (*n_norm * 2.0 * v_norm.dot(*n_norm))
 }
 
 fn vec_refract(v: &Vec3f, n: &Vec3f, etai_over_etat: f32) -> Vec3f {
-    let cos_theta = f32::min(-v.dot(n), 1.0);
+    let cos_theta = f32::min(-v.dot(*n), 1.0);
     let r_out_perp =  (*v + (*n * cos_theta)) * etai_over_etat;
     let r_out_parallel = *n * (-(1.0 - r_out_perp.length_squared()).abs().sqrt());
     r_out_perp + r_out_parallel
@@ -213,7 +213,7 @@ impl MaterialTrait for MatPrincipled {
             // Or do old school lambertian diffuse
             let new_dir = (util::rand_unit_vec() + hit.normal).normalize();
             // Make sure to discard those pesky too tiny vectors.
-            if !new_dir.near_zero() {
+            if !new_dir.abs_diff_eq(vec3(0.0, 0.0, 0.0), 0.0001) {
                 let new_ray = Ray::new(&hit.point, &new_dir);
                 (Some(new_ray), Some(self.albedo.clone()))
             } else {
@@ -290,7 +290,7 @@ impl MaterialTrait for MatGlass {
         // Compute the relative index of refraction (ior) depending on whether the ray is entering or exiting the material.
         let ior_rel = if hit.front_face { 1.0 / self.ior } else { self.ior };
         // Calculate the cosine of the angle between the incoming ray and the surface normal.
-        let cos_theta = f32::min(-unit_direction.dot(&hit.normal), 1.0);
+        let cos_theta = f32::min(-unit_direction.dot(hit.normal), 1.0);
         // Calculate the sine of the angle using the Pythagorean identity.
         let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
         // Determine if total internal reflection occurs (i.e., refraction is not possible).
