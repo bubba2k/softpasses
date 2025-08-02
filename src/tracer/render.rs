@@ -1,4 +1,6 @@
 use std::time::Instant;
+use itertools::Itertools;
+use rayon::prelude::*;
 
 use crate::tracer::camera::{Camera, };
 use crate::tracer::hittable::{HittableList, HittableTrait};
@@ -112,6 +114,27 @@ pub fn render_region(cam: Camera, settings: RenderSettings, world: HittableList,
     colors
 }
 
+fn estimate_render_time(camera: &Camera, world: &HittableList, settings: &RenderSettings, num_threads: u32) {
+    // Attempt to get a somewhat accurate estimate of the total render time here.
+    // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
+    let estimate_settings = RenderSettings{
+        samples_per_pixel: 1,
+        ..*settings
+    };
+    let estimate_start = std::time::Instant::now();
+    let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
+    render_region(camera.clone(), estimate_settings, world.clone(), region.clone());
+    // It seems a bit impossible to estimate how much the number of threads actually influences
+    // the render time. Assume half for more than 1. Thats it uhhh
+    let estimate_duration = estimate_start.elapsed().as_secs_f32()
+                               * settings.samples_per_pixel as f32  // Attenuate for actual spp value
+                               * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
+    let estimate_minutes = estimate_duration as u32 / 60;
+    let estimate_seconds = estimate_duration as u32 % 60;
+    let now = chrono::Local::now();
+    eprintln!("Started at {}\nEst. render time: {:02}:{:02}", now.format("%H:%M:%S"), estimate_minutes, estimate_seconds);
+}
+
 fn background_color(dir: Vec3f) -> Color {
     // Compute the background color in the given direction. Basically we think of the environment
     // as a unitsphere, with the camera at the center. That way we can determine the backgrounds
@@ -167,8 +190,16 @@ pub trait Scheduler {
 #[derive(Default)]
 pub struct NaiveSingleThreadScheduler {}
 
+impl NaiveSingleThreadScheduler {
+    pub fn new() -> Self {
+        NaiveSingleThreadScheduler {}
+    }
+}
+
 impl Scheduler for NaiveSingleThreadScheduler {
     fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+        estimate_render_time(&camera, world, &settings, 1);
+
         let start = Instant::now();
 
         let region = ImageRegion::whole_image(settings.image_width, settings.image_height);
@@ -202,24 +233,9 @@ impl Scheduler for NaiveMultiThreadScheduler {
     fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
         // Should probably have a more user friendly way to set the number of threads at some point.
         let num_threads = self.num_threads;
-        // Attempt to get a somewhat accurate estimate of the total render time here.
-        // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
-        let estimate_settings = RenderSettings{
-            samples_per_pixel: 1,
-            ..settings
-        };
-        let estimate_start = std::time::Instant::now();
         let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
-        render_region(camera.clone(), estimate_settings, world.clone(), region.clone());
-        // It seems a bit impossible to estimate how much the number of threads actually influences
-        // the render time. Assume half for more than 1. Thats it uhhh
-        let estimate_duration = estimate_start.elapsed().as_secs_f32()
-                                   * settings.samples_per_pixel as f32  // Attenuate for actual spp value
-                                   * (1.0 / num_threads.clamp(1, 2) as f32); // Attenuate for thread count
-        let estimate_minutes = estimate_duration as u32 / 60;
-        let estimate_seconds = estimate_duration as u32 % 60;
-        let now = chrono::Local::now();
-        eprintln!("Started at {}\nEst. render time: {:02}:{:02}", now.format("%H:%M:%S"), estimate_minutes, estimate_seconds);
+        // Print estimated render time
+        estimate_render_time(&camera, world, &settings, num_threads);
         let start = std::time::Instant::now();
         // Let several threads render the entire image with the same settings. For now,
         // we simply copy all relevant data right over. Might change that later on.
@@ -274,3 +290,84 @@ impl Scheduler for NaiveMultiThreadScheduler {
     }
 }
 
+pub struct TiledScheduler {
+    tile_size: u32,
+}
+
+impl TiledScheduler {
+    pub fn new(tile_size: u32) -> Self {
+        TiledScheduler { tile_size: tile_size }
+    }
+}
+
+impl Scheduler for TiledScheduler {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &HittableList) -> RenderResult {
+        // Rougly estimate render time here
+        estimate_render_time(&camera, world, &settings, 2);
+
+        // Clamp tile size to minimum of 1 and maximum of image width. 
+        // -> This way, at least 1 tile fits entirely into the image.
+        let tile_size_clamped = 
+            self.tile_size.clamp(1, u32::min(settings.image_height, settings.image_width));
+
+        let begin = Instant::now();
+
+        // Compute the number of tiles that fit into the image, including tiles that fit only partially.
+        let num_tiles_ver = settings.image_height.div_ceil(tile_size_clamped);
+        let num_tiles_hor = settings.image_width.div_ceil(tile_size_clamped);
+
+        let mut tiles = Vec::<ImageRegion>::new();
+        for (yi, xi) in (0..num_tiles_ver).cartesian_product(0..num_tiles_hor) {
+            let (tile_x, tile_y) = (xi * tile_size_clamped, yi * tile_size_clamped);
+            // Calculate the actual width and height of the tile. This only matters at the right and bottom
+            // edges, where a tile might not fit entirely into the screen, and we have to crop it to fit.
+            let tile_width  = (settings.image_width  - tile_x).clamp(0, tile_size_clamped);
+            let tile_height = (settings.image_height - tile_y).clamp(0, tile_size_clamped);
+            
+            tiles.push(ImageRegion::new(tile_x, tile_y, tile_width, tile_height));
+        }
+
+        // Render out the tiles 
+        let rendered_tiles: Vec<Vec<Color>> = tiles
+            // Rayon does all the thread magic for us here
+            .par_iter()
+            .map(|tile| render_region(camera.clone(), settings.clone(), world.clone(), tile.clone())).collect();
+
+        // Flatten the rendered tiles to the final image. This is a bit finicky.
+        // Helper func to flatten a row of tiles: Read all first pixel rows of all tiles, then all second, etc ...
+        let fn_flatten_tilerow = |tile_row: &[Vec<Color>], tile_height: u32| -> Vec<Color> {
+            let mut flattened_colors = Vec::default();
+            for y in 0..tile_height {
+                for tile in tile_row.iter() {
+                    let tile_width = tile.len() / tile_height as usize;
+                    let begin_idx = tile_width * y as usize;
+
+                    flattened_colors.extend_from_slice(&tile[begin_idx..(begin_idx + tile_width)]);
+                }
+            }
+
+            flattened_colors
+        };
+
+        let pixels = rendered_tiles.chunks(num_tiles_hor as usize)
+            .map(|tile_row| {
+                // The first tile in every row is guaranted to have full width, so we can use
+                // the tile size directly here to get the pixel height of the row.
+                let tile_height = tile_row[0].len() as u32 / tile_size_clamped;
+                fn_flatten_tilerow(tile_row, tile_height)
+            })
+            // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
+            .flatten()
+            .map(|c| color_to_pixel(&c))
+            .collect();
+
+        RenderResult {  pixels: pixels, 
+                        time_elapsed: begin.elapsed().as_secs_f32(),
+                        image_height: settings.image_height,
+                        image_width: settings.image_width,
+                        num_samples: settings.samples_per_pixel,
+                        max_bounces: settings.max_bounces,
+                        num_objects: world.num_objects(), 
+        }
+    }
+}

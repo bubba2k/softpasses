@@ -13,7 +13,7 @@ use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
 use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
 use math::util::Interval;
 
-use crate::tracer::render::{NaiveMultiThreadScheduler, Scheduler};
+use crate::tracer::render::{NaiveMultiThreadScheduler, NaiveSingleThreadScheduler, Scheduler, TiledScheduler};
 
 // Scatter spheres on a plane
 fn scatter_spheres(world: &mut HittableList, count: u32, height: f32, scatter_radius: f32, sphere_radius: (f32, f32)) {
@@ -76,7 +76,9 @@ fn main() {
     world.push(sphere3);
     world.push(sphere4);
    
-    let render_result = NaiveMultiThreadScheduler::new(3).render(camera, settings, &world);
+    let render_result = TiledScheduler::new(64).render(camera, settings, &world);
+    // NaiveMultiThread Sched seems to be faster for the simple scene right now. But lets keep using the Tiled one.
+    // let render_result = NaiveMultiThreadScheduler::new(3).render(camera, settings, &world);
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
