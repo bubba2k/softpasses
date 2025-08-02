@@ -1,4 +1,4 @@
-pub type Vec3f = glam::Vec3;
+pub type Vec3f = glam::Vec3A;
 pub type Color = Vec3f;
 pub type Pixel = glam::U8Vec3;
 pub type Float = f32;
