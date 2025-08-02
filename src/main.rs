@@ -5,13 +5,28 @@ mod math;
 mod io;
 mod tracer;
 
-use math::vector::{Vec3f, vec3, Float};
+use math::vector::{Vec3f, vec3, Float, Color};
 use tracer::camera::{self, Camera};
 use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
 use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
 use math::util::Interval;
 
-use crate::tracer::render::{NaiveMultiThreadScheduler, NaiveSingleThreadScheduler, Scheduler, TiledScheduler};
+use crate::tracer::render::{Scheduler, TiledScheduler};
+use crate::tracer::world::{Background, World};
+
+// A nice custom background gradient
+fn background_color(dir: Vec3f) -> Color {
+    // Compute the background color in the given direction. Basically we think of the environment
+    // as a unitsphere, with the camera at the center. That way we can determine the backgrounds
+    // color simply by what direction we are looking in.
+    // For now, it is a simple gradient along the y axis.
+    const BRIGHTNESS: Float = 1.0;
+    const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
+    const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
+    let a = (dir.normalize().y + 1.0) * 0.5;
+    let lerped_color = COLOR_B * (1.0 - a) + COLOR_A * a;
+    lerped_color * BRIGHTNESS
+}
 
 // Scatter spheres on a plane
 fn scatter_spheres(world: &mut HittableList, count: u32, height: Float, scatter_radius: Float, sphere_radius: (Float, Float)) {
@@ -67,12 +82,16 @@ fn main() {
     let sphere2: Hittable = Sphere::new(vec3( 0.0, 0.5, 0.0), 0.5, mat_rough);
     let sphere3: Hittable = Sphere::new(vec3( 1.1, 0.5, 0.0), 0.5, mat_metal);
 
-    let mut world: HittableList = HittableList::default();
-    world.push(floor);
-    world.push(sphere1);
-    world.push(sphere2);
-    world.push(sphere3);
-    world.push(sphere4);
+    let mut objects: HittableList = HittableList::default();
+    objects.push(floor);
+    objects.push(sphere1);
+    objects.push(sphere2);
+    objects.push(sphere3);
+    objects.push(sphere4);
+
+    let background = Background::from_function(background_color);
+
+    let world = World::new(objects, background);
    
     let render_result = TiledScheduler::new(64).render(camera, settings, &world);
     // NaiveMultiThread Sched seems to be faster for the simple scene right now. But lets keep using the Tiled one.
