@@ -11,7 +11,9 @@ use tracer::hittable::{HittableList, Hittable, Sphere, Plane};
 use tracer::material::{MatLambertDiffuse, MaterialTrait, Material, MatGlass, MatPrincipled};
 use math::util::Interval;
 
+use crate::tracer::hittable::Parallelepiped;
 use crate::tracer::render::{Scheduler, TiledScheduler};
+use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
 // A nice custom background gradient
@@ -51,16 +53,16 @@ fn main() {
     let height: u32 = 1024 / 2;
     let aspect_ratio: Float = width as Float / height as Float;
 
-    let pose = camera::Pose::look_at(Vec3f::new(-10.3, 0.6, 8.9), 
-                                            Vec3f::new(0.0, 0.6, -0.1));
+    let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.5, 4.0), 
+                                            Vec3f::new(0.0, 0.5, 0.0));
     let lens = camera::Lens::new(
         15,
-        80, 
+        20, 
         aspect_ratio,
-        3.44,
+        13.44,
     0.0);
     let settings = tracer::render::RenderSettings {
-        samples_per_pixel: 100,
+        samples_per_pixel: 200,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -69,16 +71,21 @@ fn main() {
     let camera = Camera::new(pose, lens);
 
     // Scene setup
-    let mat_floor = MatLambertDiffuse::new(Vec3f::new(0.2, 0.9, 0.2), 1.0);
+    let mat_floor = MatLambertDiffuse::new(Vec3f::new(0.8, 0.8, 0.8), 1.0);
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
     let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
     let mat_rough = MatLambertDiffuse::new(vec3(1.0, 0.1, 0.1), 1.0);
 
-    let floor = Plane::new(Vec3f::new(0.0, 1.0, 0.0), 0.0, mat_floor);
+    let floor = Parallelepiped::new(
+        vec3(-1.5, -1.0, -1.0),
+        vec3(1.5, -1.0, -1.0),
+            vec3(-1.5, -1.0, 1.0),
+            vec3(-1.5, 0.0, -1.0),
+            mat_floor);
 
-    let sphere1: Hittable = Sphere::new(vec3(-1.1, 0.5, 0.0), 0.5, mat_glass);
-    let sphere4: Hittable = Sphere::new(vec3(-1.1, 0.5, 0.0), 0.45, mat_inner);
+    let sphere1: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.5, mat_glass);
+    let sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let sphere2: Hittable = Sphere::new(vec3( 0.0, 0.5, 0.0), 0.5, mat_rough);
     let sphere3: Hittable = Sphere::new(vec3( 1.1, 0.5, 0.0), 0.5, mat_metal);
 
@@ -89,7 +96,10 @@ fn main() {
     objects.push(sphere3);
     objects.push(sphere4);
 
-    let background = Background::from_function(background_color);
+    let texture_bytes = include_bytes!("../assets/Indoor1_HDRI_2K-TONEMAPPED.jpg");
+    let env_texture = Texture::from_data(texture_bytes).unwrap();
+
+    let background = Background::from_environment_texture(env_texture, -4.0);
 
     let world = World::new(objects, background);
    
