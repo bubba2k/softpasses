@@ -147,7 +147,11 @@ pub struct MatLambertDiffuse {
 }
 
 impl MatLambertDiffuse {
-    pub fn new(c: Color, _refl: Float) -> Material {
+    // Note: We use brdf_lam = albedo, instead of the technically more correct 
+    // brdf_lam = albedo / pi. This is more convenient for users and means that
+    // albedo is implicitely multiplied by pi.
+    // Further reading: https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
+    pub fn new(c: Color) -> Material {
         Material::MatLambertDiffuse(MatLambertDiffuse { albedo: c })
     }
 }

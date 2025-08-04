@@ -49,33 +49,33 @@ fn scatter_spheres(world: &mut HittableList, count: u32, height: Float, scatter_
 }
 
 fn main() {
-    let width: u32  = 1280 / 2;
-    let height: u32 = 1024 / 2;
+    let width: u32  = 1280 / 3;
+    let height: u32 = 1024 / 3;
     let aspect_ratio: Float = width as Float / height as Float;
 
-    let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.5, 4.0), 
+    let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.5, 8.0), 
                                             Vec3f::new(0.0, 0.5, 0.0));
     let lens = camera::Lens::new(
         15,
-        20, 
+        30, 
         aspect_ratio,
-        13.44,
-    0.0);
+        8.1,
+    0.5);
     let settings = tracer::render::RenderSettings {
-        samples_per_pixel: 200,
+        samples_per_pixel: 64,
         max_bounces: 10,
         image_width: width,
         image_height: height,
-        ray_limits: Interval::new(0.001, 10000.0),
+        ray_limits: Interval::new(0.001, 1000.0),
     };
     let camera = Camera::new(pose, lens);
 
     // Scene setup
-    let mat_floor = MatLambertDiffuse::new(Vec3f::new(0.8, 0.8, 0.8), 1.0);
+    let mat_floor = MatLambertDiffuse::new(Vec3f::new(1.0, 1.0, 1.0));
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
     let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
-    let mat_rough = MatLambertDiffuse::new(vec3(1.0, 0.1, 0.1), 1.0);
+    let mat_rough = MatLambertDiffuse::new(vec3(1.0, 0.1, 0.1));
 
     let floor = Parallelepiped::new(
         vec3(-1.5, -1.0, -1.0),
@@ -96,10 +96,10 @@ fn main() {
     objects.push(sphere3);
     objects.push(sphere4);
 
-    let texture_bytes = include_bytes!("../assets/Indoor1_HDRI_2K-TONEMAPPED.jpg");
+    let texture_bytes = include_bytes!("../assets/Indoor2_HDRI_4K-TONEMAPPED.jpg");
     let env_texture = Texture::from_data(texture_bytes).unwrap();
 
-    let background = Background::from_environment_texture(env_texture, -4.0);
+    let background = Background::from_environment_texture(env_texture, -3.1);
 
     let world = World::new(objects, background);
    
