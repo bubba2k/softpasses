@@ -1141,7 +1141,6 @@ fn load_obj(path: &Path) -> Vec<Triangle> {
         triangulate: true,
         ignore_lines: true,
         ignore_points: true,
-        reorder_data: false,
     };
 
     let (models, _) = tobj::load_obj(path, &LOAD_OPTIONS).expect("Failed to load OBJ file");

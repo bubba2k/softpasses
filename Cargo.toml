@@ -11,4 +11,4 @@ itertools = "0.14.0"
 load_image = "3.3.0"
 rand = "0.9.1"
 rayon = "1.10.0"
-tobj = { version = "4.0.3", features = ["reordering"] }
+tobj = "4.0.3"
