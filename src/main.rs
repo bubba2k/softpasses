@@ -18,7 +18,7 @@ use tracer::material::{
     Material, MaterialTrait,
 };
 #[allow(unused_imports)]
-use crate::tracer::render::{Scheduler, TiledScheduler, NaiveMultiThreadScheduler, NaiveSingleThreadScheduler};
+use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
