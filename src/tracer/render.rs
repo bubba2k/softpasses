@@ -91,9 +91,9 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u3
 
 // Render a specific region of the image.
 pub fn render_region(
-    cam: Camera,
-    settings: RenderSettings,
-    world: World,
+    cam: &Camera,
+    settings: &RenderSettings,
+    world: &World,
     region: util::ImageRegion,
 ) -> Vec<Color> {
     let mut colors: Vec<Color> = Vec::new();
@@ -144,10 +144,10 @@ fn estimate_render_time(
     let estimate_start = std::time::Instant::now();
     let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
     render_region(
-        camera.clone(),
-        estimate_settings,
-        world.clone(),
-        region.clone(),
+        camera,
+        &estimate_settings,
+        world,
+        region,
     );
     // It seems a bit impossible to estimate how much the number of threads actually influences
     // the render time. Assume half for more than 1. Thats it uhhh
@@ -229,7 +229,7 @@ impl Scheduler for NaiveSingleThreadScheduler {
         let start = Instant::now();
 
         let region = ImageRegion::whole_image(settings.image_width, settings.image_height);
-        let image = render_region(camera, settings.clone(), world.clone(), region);
+        let image = render_region(&camera, &settings, &world, region);
 
         let image_pixels = image.iter().map(color_to_pixel).collect();
 
@@ -270,25 +270,10 @@ impl Scheduler for NaiveMultiThreadScheduler {
         // we simply copy all relevant data right over. Might change that later on.
         // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
         let spp_per_thread = settings.samples_per_pixel / num_threads;
-        let mut thread_handles = Vec::new();
-        for _ in 0..num_threads {
-            let cam_copy = camera.clone();
-            let world_copy = world.clone();
-            let thread_settings = RenderSettings {
-                samples_per_pixel: spp_per_thread,
-                ..settings
-            };
-            let region_copy = region.clone();
-            thread_handles.push(std::thread::spawn(|| {
-                render_region(cam_copy, thread_settings, world_copy, region_copy)
-            }));
-        }
-        // Await and collect images from each thread.
-        let mut images: Vec<_> = Vec::new();
-        for handle in thread_handles {
-            let image = handle.join().unwrap();
-            images.push(image);
-        }
+        let images: Vec<Vec<Color>> = (0..num_threads).into_par_iter().map(|_| {
+            render_region(&camera, &settings, &world, region.clone())
+        }).collect();
+        
         // Perform weighted sum of all generated images.
         let weight = 1.0 / num_threads as Float;
         let len = images[0].len();
@@ -364,9 +349,9 @@ impl Scheduler for TiledScheduler {
             .par_iter()
             .map(|tile| {
                 render_region(
-                    camera.clone(),
-                    settings.clone(),
-                    world.clone(),
+                    &camera,
+                    &settings,
+                    &world,
                     tile.clone(),
                 )
             })
