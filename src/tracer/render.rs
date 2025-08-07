@@ -5,9 +5,9 @@ use std::time::Instant;
 use super::material::MaterialTrait;
 use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
-use crate::math::vector::{Color, Float, Pixel, Vec3f};
+use crate::math::vector::{Color, Float, Pixel};
 use crate::tracer::camera::Camera;
-use crate::tracer::hittable::{HittableList, HittableTrait};
+use crate::tracer::hittable::HittableTrait;
 use crate::tracer::world::World;
 
 fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color {
@@ -55,9 +55,10 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u3
             return COLOR_BLACK;
         }
         // Fire the ray. See if it hits anything.
-        if let Some(hit) = world
-            .objects_bvh
-            .try_hit(&current_ray, settings.ray_limits, bounce_counter)
+        if let Some(hit) =
+            world
+                .objects_bvh
+                .try_hit(&current_ray, settings.ray_limits, bounce_counter)
         {
             match hit.material.scatter(&current_ray, &hit) {
                 (Some(scatter_ray), Some(color_att)) => {

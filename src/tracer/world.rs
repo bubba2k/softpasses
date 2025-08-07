@@ -1,8 +1,6 @@
+use crate::math::vector::{Color, Float, Vec3f};
 use crate::tracer::hittable::{BVH, Hittable};
 use crate::tracer::texture::Texture;
-use crate::{
-    math::vector::{Color, Float, Vec3f, vec3},
-};
 
 #[derive(Clone)]
 pub struct World {

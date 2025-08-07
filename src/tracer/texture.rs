@@ -1,4 +1,4 @@
-use std::{ops::Div, path::Path};
+use std::path::Path;
 
 use load_image::load_data;
 

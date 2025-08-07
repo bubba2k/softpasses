@@ -2,7 +2,6 @@ use super::material::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
-use std::fmt::Debug;
 use std::path::Path;
 
 pub struct HitRecord<'a> {
@@ -770,8 +769,6 @@ impl Triangle {
 
         if interval.contains(t) { Some(t) } else { None }
     }
-
-    
 }
 
 #[derive(Default, Clone)]
@@ -784,7 +781,7 @@ struct BVHNode {
 }
 
 #[derive(Clone)]
-pub struct BVH <T: HittableTrait> {
+pub struct BVH<T: HittableTrait> {
     hittables: Vec<T>,
     nodes: Vec<BVHNode>,
 }
@@ -799,7 +796,10 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
     }
 
     fn num_primitives(&self) -> u32 {
-        self.hittables.iter().map(HittableTrait::num_primitives).sum()
+        self.hittables
+            .iter()
+            .map(HittableTrait::num_primitives)
+            .sum()
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
@@ -812,15 +812,15 @@ impl<T: HittableTrait> BVH<T> {
         let num_objs = list.len();
 
         // Assume one triangle per leaf
-        let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * num_objs - 1]; 
+        let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * num_objs - 1];
         // Set the root node
         bvh_nodes[0].first_prim = 0;
-        bvh_nodes[0].num_prims = num_objs as u32;   
-        Self::subdivide(&mut bvh_nodes, &mut list, 0); 
+        bvh_nodes[0].num_prims = num_objs as u32;
+        Self::subdivide(&mut bvh_nodes, &mut list, 0);
         Self {
             hittables: list,
             nodes: bvh_nodes,
-        }        
+        }
     }
 
     fn try_hit_rec(
@@ -837,17 +837,19 @@ impl<T: HittableTrait> BVH<T> {
         if node.left_child == 0 {
             let range =
                 (node.first_prim as usize)..(node.first_prim as usize + node.num_prims as usize);
-            return range.map(|idx| {
-                self.hittables[idx].try_hit(ray, t_interval, num_bounces)
-            }).flatten().min_by(|a, b| a.t.total_cmp(&b.t));
+            return range
+                .map(|idx| self.hittables[idx].try_hit(ray, t_interval, num_bounces))
+                .flatten()
+                .min_by(|a, b| a.t.total_cmp(&b.t));
         }
 
         if node.aabb.hit(ray, t_interval) {
             let left_idx = bvh_idx * 2 + 1;
             let right_idx = bvh_idx * 2 + 2;
 
-            [left_idx, right_idx].iter().flat_map(|idx| 
-                self.try_hit_rec(ray, t_interval, num_bounces, *idx))
+            [left_idx, right_idx]
+                .iter()
+                .flat_map(|idx| self.try_hit_rec(ray, t_interval, num_bounces, *idx))
                 .min_by(|a, b| a.t.total_cmp(&b.t))
         } else {
             None
@@ -895,7 +897,7 @@ impl<T: HittableTrait> BVH<T> {
         }
 
         // Initialize the two children nodes and go on to subidivide them
-        let left_idx  = bvh_node_index * 2 + 1;
+        let left_idx = bvh_node_index * 2 + 1;
         let right_idx = bvh_node_index * 2 + 2;
 
         let left_num = i - bvh[bvh_node_index as usize].first_prim;
@@ -918,7 +920,6 @@ impl<T: HittableTrait> BVH<T> {
         Self::subdivide(bvh, objects, left_idx);
         Self::subdivide(bvh, objects, right_idx);
     }
-
 }
 
 #[derive(Clone)]

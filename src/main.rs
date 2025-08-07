@@ -8,15 +8,16 @@ mod tracer;
 use std::path::Path;
 
 use math::util::Interval;
-use math::vector::{Color, Float, Vec3f, vec3};
+use math::vector::{Float, Vec3f, vec3};
 use tracer::camera::{self, Camera};
-use tracer::hittable::{BVHMesh, Hittable, HittableList, Plane, Sphere};
+#[allow(unused_imports)]
+use tracer::hittable::{BVHMesh, Hittable, Mesh, Parallelepiped, Plane, Sphere};
+#[allow(unused_imports)]
 use tracer::material::{
-    MatBounceDebug, MatGlass, MatLambertDiffuse, MatPrincipled, Material, MaterialTrait,
+    MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
+    Material, MaterialTrait,
 };
 
-use crate::tracer::hittable::{Mesh, Parallelepiped};
-use crate::tracer::material::{MatFaceDebug, MatNormalDebug};
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
@@ -43,7 +44,6 @@ fn main() {
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
     let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
     let mat_rough = MatLambertDiffuse::new(vec3(1.0, 0.1, 0.1));
-    let mat_facedbg = MatFaceDebug::new();
 
     let floor = Parallelepiped::new(
         vec3(-2.5, -1.0, -2.0),
@@ -53,13 +53,13 @@ fn main() {
         mat_floor,
     );
 
-    let sphere1: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.5, mat_glass.clone());
-    let sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
-    let sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
-    let sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
+    let _sphere1: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.5, mat_glass.clone());
+    let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
+    let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
+    let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
     let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_rough);
 
-    let objects = vec![teapot];
+    let objects = vec![teapot, floor];
 
     let env_texture =
         Texture::from_path(Path::new("assets/Indoor2_HDRI_4K-TONEMAPPED.jpg")).unwrap();
