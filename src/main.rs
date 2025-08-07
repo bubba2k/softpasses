@@ -93,7 +93,7 @@ fn main() {
     let sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = Mesh::from_obj_file(Path::new("assets/teapot.obj"), mat_facedbg.clone());
+    let teapot = Mesh::from_obj_file(Path::new("assets/teapot.obj"), mat_metal.clone());
 
     let mut objects: HittableList = HittableList::default();
     objects.push(floor);
