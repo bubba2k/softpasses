@@ -19,44 +19,6 @@ use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
-// A nice custom background gradient
-fn background_color(dir: Vec3f) -> Color {
-    // Compute the background color in the given direction. Basically we think of the environment
-    // as a unitsphere, with the camera at the center. That way we can determine the backgrounds
-    // color simply by what direction we are looking in.
-    // For now, it is a simple gradient along the y axis.
-    const BRIGHTNESS: Float = 1.0;
-    const COLOR_A: Color = Color::new(0.5, 0.7, 1.0);
-    const COLOR_B: Color = Color::new(1.0, 1.0, 1.0);
-    let a = (dir.normalize().y + 1.0) * 0.5;
-    let lerped_color = COLOR_B * (1.0 - a) + COLOR_A * a;
-    lerped_color * BRIGHTNESS
-}
-
-// Scatter spheres on a plane
-fn scatter_spheres(
-    world: &mut HittableList,
-    count: u32,
-    height: Float,
-    scatter_radius: Float,
-    sphere_radius: (Float, Float),
-) {
-    for _ in 0..count {
-        // Make it so the spheres "sit" on the given plane height
-        let radius = math::util::rand_range_f(sphere_radius.0, sphere_radius.1);
-        let height = height + radius;
-
-        let angle = math::util::rand_range_f(0.0, 2.0 * std::f64::consts::PI as Float);
-        let distance = math::util::rand_range_f(0.0, 1.0).sqrt() * scatter_radius;
-        let (x, y) = (Float::cos(angle) * distance, Float::sin(angle) * distance);
-        let center = Vec3f::new(x, height, y);
-        let material = Material::random_instance();
-        let sphere = Sphere::new(center, radius, material);
-
-        world.push(sphere);
-    }
-}
-
 fn main() {
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;

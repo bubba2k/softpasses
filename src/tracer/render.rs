@@ -143,12 +143,7 @@ fn estimate_render_time(
     };
     let estimate_start = std::time::Instant::now();
     let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
-    render_region(
-        camera,
-        &estimate_settings,
-        world,
-        region,
-    );
+    render_region(camera, &estimate_settings, world, region);
     // It seems a bit impossible to estimate how much the number of threads actually influences
     // the render time. Assume half for more than 1. Thats it uhhh
     let estimate_duration = estimate_start.elapsed().as_secs_f64() as Float
@@ -270,10 +265,11 @@ impl Scheduler for NaiveMultiThreadScheduler {
         // we simply copy all relevant data right over. Might change that later on.
         // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
         let spp_per_thread = settings.samples_per_pixel / num_threads;
-        let images: Vec<Vec<Color>> = (0..num_threads).into_par_iter().map(|_| {
-            render_region(&camera, &settings, &world, region.clone())
-        }).collect();
-        
+        let images: Vec<Vec<Color>> = (0..num_threads)
+            .into_par_iter()
+            .map(|_| render_region(&camera, &settings, &world, region.clone()))
+            .collect();
+
         // Perform weighted sum of all generated images.
         let weight = 1.0 / num_threads as Float;
         let len = images[0].len();
@@ -347,14 +343,7 @@ impl Scheduler for TiledScheduler {
         let rendered_tiles: Vec<Vec<Color>> = tiles
             // Rayon does all the thread magic for us here
             .par_iter()
-            .map(|tile| {
-                render_region(
-                    &camera,
-                    &settings,
-                    &world,
-                    tile.clone(),
-                )
-            })
+            .map(|tile| render_region(&camera, &settings, &world, tile.clone()))
             .collect();
 
         // Flatten the rendered tiles to the final image. This is a bit finicky.
