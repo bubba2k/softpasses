@@ -10,8 +10,10 @@ use std::path::Path;
 use math::util::Interval;
 use math::vector::{Color, Float, Vec3f, vec3};
 use tracer::camera::{self, Camera};
-use tracer::hittable::{Hittable, HittableList, Plane, BVHMesh, Sphere};
-use tracer::material::{MatGlass, MatLambertDiffuse, MatPrincipled, Material, MaterialTrait, MatBounceDebug};
+use tracer::hittable::{BVHMesh, Hittable, HittableList, Plane, Sphere};
+use tracer::material::{
+    MatBounceDebug, MatGlass, MatLambertDiffuse, MatPrincipled, Material, MaterialTrait,
+};
 
 use crate::tracer::hittable::{Mesh, Parallelepiped};
 use crate::tracer::material::{MatFaceDebug, MatNormalDebug};

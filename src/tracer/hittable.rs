@@ -1,9 +1,9 @@
-use std::path::Path;
-use std::fmt::Debug;
 use super::material::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
+use std::fmt::Debug;
+use std::path::Path;
 
 pub struct HitRecord<'a> {
     pub point: Vec3f,
@@ -247,7 +247,7 @@ impl HittableTrait for HittableList {
     }
 
     fn centroid(&self) -> Vec3f {
-        let sum: Vec3f = self.list.iter().map(|el| el.centroid() ).sum();
+        let sum: Vec3f = self.list.iter().map(|el| el.centroid()).sum();
         sum / self.list.len() as Float
     }
 }
@@ -575,9 +575,11 @@ impl HittableTrait for Parallelogram {
     }
 
     fn centroid(&self) -> Vec3f {
-        self.projected_bounds.iter().map(|p| {
-            project_onto_plane_normalized(*p, self.normal) + self.normal * self.d
-        }).sum::<Vec3f>() / 4.0
+        self.projected_bounds
+            .iter()
+            .map(|p| project_onto_plane_normalized(*p, self.normal) + self.normal * self.d)
+            .sum::<Vec3f>()
+            / 4.0
     }
 
     fn get_aabb(&self) -> AABoundingBox {
@@ -729,7 +731,6 @@ impl Parallelepiped {
     }
 }
 
-
 #[derive(Clone)]
 struct Triangle {
     positions: [Vec3f; 3],
@@ -739,7 +740,7 @@ struct Triangle {
 
 impl Triangle {
     fn ray_intersection(&self, ray: &Ray, interval: &Interval) -> Option<Float> {
-        let (a, b, c) = ( &self.positions[0], &self.positions[1], &self.positions[2] );
+        let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
         // Determine whether the ray is parallel
         let edge1 = b - a;
         let edge2 = c - a;
@@ -762,11 +763,7 @@ impl Triangle {
         }
         let t = f * edge2.dot(q);
 
-        if interval.contains(t) {
-            Some(t) 
-        } else {
-            None
-        }
+        if interval.contains(t) { Some(t) } else { None }
     }
 }
 
@@ -788,7 +785,12 @@ pub struct BVHMesh {
 
 impl Debug for BVHMesh {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn print_node(nodes: &Vec<BVHNode>, idx: usize, depth: usize, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fn print_node(
+            nodes: &Vec<BVHNode>,
+            idx: usize,
+            depth: usize,
+            f: &mut std::fmt::Formatter<'_>,
+        ) -> std::fmt::Result {
             if idx >= nodes.len() {
                 return Ok(());
             }
@@ -830,11 +832,15 @@ impl BVHMesh {
 
         // Set the root node
         bvh_nodes[0].first_prim = 0;
-        bvh_nodes[0].num_prims  = num_tris as u32;
+        bvh_nodes[0].num_prims = num_tris as u32;
 
         Self::subdivide(&mut bvh_nodes, &mut triangles, 0);
 
-        Self { triangles: triangles, nodes: bvh_nodes, material: material }
+        Self {
+            triangles: triangles,
+            nodes: bvh_nodes,
+            material: material,
+        }
     }
 
     fn subdivide(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<Triangle>, bvh_node_index: u32) {
@@ -857,13 +863,17 @@ impl BVHMesh {
 
         // Split along the longest axis, determine split value
         let mut axis = 0;
-        if extent.y > extent.x { axis = 1 }
-        if extent.z > extent[axis] { axis = 2 }
+        if extent.y > extent.x {
+            axis = 1
+        }
+        if extent.z > extent[axis] {
+            axis = 2
+        }
         let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
 
         // Sort to the left and right of split value
         let mut i = node.first_prim;
-        let mut j  = i + node.num_prims - 1;
+        let mut j = i + node.num_prims - 1;
         while i <= j {
             // For now, we use the first corner of each triangle as the centroid
             // TODO: Use the actual centroid.
@@ -885,56 +895,68 @@ impl BVHMesh {
         eprintln!("left child: {} | right child: {}", left_num, right_num);
 
         bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
-        bvh[left_idx as usize].num_prims  = left_num;
+        bvh[left_idx as usize].num_prims = left_num;
         bvh[right_idx as usize].first_prim = i;
         bvh[right_idx as usize].num_prims = right_num;
 
         // If this happens, the current node shall be a leaf.
-        if left_num == 0 || right_num == 0 { return; }
-        
-        bvh[bvh_node_index as usize].left_child  = left_idx;
+        if left_num == 0 || right_num == 0 {
+            return;
+        }
+
+        bvh[bvh_node_index as usize].left_child = left_idx;
         bvh[bvh_node_index as usize].right_child = right_idx;
         Self::subdivide(bvh, triangles, left_idx);
         Self::subdivide(bvh, triangles, right_idx);
     }
 
-    fn try_hit_rec(&self, ray: &Ray, t_interval: Interval, num_bounces: u32, bvh_idx: u32) -> Option<(u32, Float)> {
-        // Traverse the bvh 
+    fn try_hit_rec(
+        &self,
+        ray: &Ray,
+        t_interval: Interval,
+        num_bounces: u32,
+        bvh_idx: u32,
+    ) -> Option<(u32, Float)> {
+        // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];
 
         // A node is a leaf if it dont have no children
         if node.left_child == 0 {
             // eprintln!("Hit primitve at {}", bvh_idx);
-            let range = (node.first_prim as usize)..(node.first_prim as usize + node.num_prims as usize);
-            return range.map(|idx| (idx as u32, &self.triangles[idx])).map(|(idx, tri)| {
-                if let Some(t_hit) = tri.ray_intersection(ray, &t_interval) {
-                    Some((idx, t_hit))
-                } else { 
-                    None
-                }
-            }).flatten().min_by(|a, b| {
-                a.1.total_cmp(&b.1)
-            });
+            let range =
+                (node.first_prim as usize)..(node.first_prim as usize + node.num_prims as usize);
+            return range
+                .map(|idx| (idx as u32, &self.triangles[idx]))
+                .map(|(idx, tri)| {
+                    if let Some(t_hit) = tri.ray_intersection(ray, &t_interval) {
+                        Some((idx, t_hit))
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .min_by(|a, b| a.1.total_cmp(&b.1));
         }
 
         if node.aabb.hit(ray, t_interval) {
-          
-            let left_idx  = bvh_idx * 2 + 1;
+            let left_idx = bvh_idx * 2 + 1;
             let right_idx = bvh_idx * 2 + 2;
 
-            match(Self::try_hit_rec(&self, ray, t_interval, num_bounces, left_idx),
-             Self::try_hit_rec(&self, ray, t_interval, num_bounces, right_idx)) {
+            match (
+                Self::try_hit_rec(&self, ray, t_interval, num_bounces, left_idx),
+                Self::try_hit_rec(&self, ray, t_interval, num_bounces, right_idx),
+            ) {
                 (Some(res1), Some(res2)) => {
                     if res1.1 < res2.1 {
                         Some(res1)
                     } else {
                         Some(res2)
                     }
-                },
+                }
                 (Some(t1), None) => Some(t1),
                 (None, Some(t2)) => Some(t2),
-                _ => None
-             }
+                _ => None,
+            }
         } else {
             None
         }
@@ -984,15 +1006,14 @@ impl HittableTrait for BVHMesh {
                 &self.material,
                 obj_normal,
             ))
-            } else {
-                None
-            }
-        
+        } else {
+            None
+        }
     }
 
     fn centroid(&self) -> Vec3f {
         (self.nodes[0].aabb.max - self.nodes[0].aabb.min) * 0.5 + self.nodes[0].aabb.min
-    }    
+    }
 }
 
 #[derive(Clone)]
