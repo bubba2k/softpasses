@@ -59,13 +59,7 @@ fn main() {
     let sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
     let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_rough);
 
-    let mut objects: HittableList = HittableList::default();
-    // objects.push(floor);
-    //    objects.push(sphere1);
-    //    objects.push(sphere2);
-    //    objects.push(sphere3);
-    //    objects.push(sphere4);
-    objects.push(teapot);
+    let objects = vec![teapot];
 
     let env_texture =
         Texture::from_path(Path::new("assets/Indoor2_HDRI_4K-TONEMAPPED.jpg")).unwrap();

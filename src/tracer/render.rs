@@ -17,7 +17,7 @@ fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -
         return COLOR_BLACK;
     }
     // Fire the ray. See if it hits anything.
-    if let Some(hit) = world.objects.try_hit(ray, settings.ray_limits, bounce) {
+    if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, bounce) {
         match hit.material.scatter(ray, &hit) {
             (Some(scatter_ray), Some(color_att)) => {
                 // Fire the reflected/scattered ray we got from the material and surface information.
@@ -56,7 +56,7 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u3
         }
         // Fire the ray. See if it hits anything.
         if let Some(hit) = world
-            .objects
+            .objects_bvh
             .try_hit(&current_ray, settings.ray_limits, bounce_counter)
         {
             match hit.material.scatter(&current_ray, &hit) {
@@ -235,7 +235,7 @@ impl Scheduler for NaiveSingleThreadScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects.num_primitives(),
+            num_objects: world.objects_bvh.num_primitives(),
         }
     }
 }
@@ -294,7 +294,7 @@ impl Scheduler for NaiveMultiThreadScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects.num_primitives(),
+            num_objects: world.objects_bvh.num_primitives(),
         }
     }
 }
@@ -382,7 +382,7 @@ impl Scheduler for TiledScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects.num_primitives(),
+            num_objects: world.objects_bvh.num_primitives(),
         }
     }
 }

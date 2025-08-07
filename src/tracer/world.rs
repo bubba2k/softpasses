@@ -1,19 +1,21 @@
+use crate::tracer::hittable::{BVH, Hittable};
 use crate::tracer::texture::Texture;
 use crate::{
     math::vector::{Color, Float, Vec3f, vec3},
-    tracer::hittable::HittableList,
 };
 
 #[derive(Clone)]
 pub struct World {
-    pub objects: HittableList,
+    pub objects_bvh: BVH<Hittable>,
     pub background: Background,
 }
 
 impl World {
-    pub fn new(objects: HittableList, background: Background) -> Self {
+    pub fn new(objects: Vec<Hittable>, background: Background) -> Self {
+        let bvh = BVH::new(objects);
+
         World {
-            objects,
+            objects_bvh: bvh,
             background,
         }
     }

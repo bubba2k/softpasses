@@ -183,6 +183,11 @@ impl AABoundingBox {
         }
     }
 
+    pub fn expand_aabb(&mut self, aabb: &AABoundingBox) {
+        self.expand(&aabb.max);
+        self.expand(&aabb.min);
+    }
+
     // Ray-box intersection using slabs method
     pub fn hit(&self, ray: &Ray, t_interval: Interval) -> bool {
         let mut tmin = t_interval.min;
@@ -765,6 +770,8 @@ impl Triangle {
 
         if interval.contains(t) { Some(t) } else { None }
     }
+
+    
 }
 
 #[derive(Default, Clone)]
@@ -777,44 +784,148 @@ struct BVHNode {
 }
 
 #[derive(Clone)]
+pub struct BVH <T: HittableTrait> {
+    hittables: Vec<T>,
+    nodes: Vec<BVHNode>,
+}
+
+impl<T: HittableTrait> HittableTrait for BVH<T> {
+    fn centroid(&self) -> Vec3f {
+        (self.get_aabb().max - self.get_aabb().min) * 0.5 + self.get_aabb().min
+    }
+
+    fn get_aabb(&self) -> AABoundingBox {
+        self.nodes[0].aabb.clone()
+    }
+
+    fn num_primitives(&self) -> u32 {
+        self.hittables.iter().map(HittableTrait::num_primitives).sum()
+    }
+
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+        self.try_hit_rec(ray, t_interval, num_bounces, 0)
+    }
+}
+
+impl<T: HittableTrait> BVH<T> {
+    pub fn new(mut list: Vec<T>) -> BVH<T> {
+        let num_objs = list.len();
+
+        // Assume one triangle per leaf
+        let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * num_objs - 1]; 
+        // Set the root node
+        bvh_nodes[0].first_prim = 0;
+        bvh_nodes[0].num_prims = num_objs as u32;   
+        Self::subdivide(&mut bvh_nodes, &mut list, 0); 
+        Self {
+            hittables: list,
+            nodes: bvh_nodes,
+        }        
+    }
+
+    fn try_hit_rec(
+        &self,
+        ray: &Ray,
+        t_interval: Interval,
+        num_bounces: u32,
+        bvh_idx: u32,
+    ) -> Option<HitRecord> {
+        // Traverse the bvh
+        let node = &self.nodes[bvh_idx as usize];
+
+        // A node is a leaf if it dont have no children
+        if node.left_child == 0 {
+            let range =
+                (node.first_prim as usize)..(node.first_prim as usize + node.num_prims as usize);
+            return range.map(|idx| {
+                self.hittables[idx].try_hit(ray, t_interval, num_bounces)
+            }).flatten().min_by(|a, b| a.t.total_cmp(&b.t));
+        }
+
+        if node.aabb.hit(ray, t_interval) {
+            let left_idx = bvh_idx * 2 + 1;
+            let right_idx = bvh_idx * 2 + 2;
+
+            [left_idx, right_idx].iter().flat_map(|idx| 
+                self.try_hit_rec(ray, t_interval, num_bounces, *idx))
+                .min_by(|a, b| a.t.total_cmp(&b.t))
+        } else {
+            None
+        }
+    }
+
+    fn subdivide(bvh: &mut Vec<BVHNode>, objects: &mut Vec<T>, bvh_node_index: u32) {
+        // Always split along longest axis for now
+        let node = &mut bvh[bvh_node_index as usize];
+        if node.num_prims == 1 {
+            // For leaf nodes, we do not initalize the aabb or anything like that
+            return;
+        }
+
+        let begin = node.first_prim as usize;
+        let end = (node.first_prim + node.num_prims) as usize;
+        for obj in objects[begin..end].iter() {
+            node.aabb.expand_aabb(&obj.get_aabb());
+        }
+
+        let extent = node.aabb.max - node.aabb.min;
+
+        // Split along the longest axis, determine split value
+        let mut axis = 0;
+        if extent.y > extent.x {
+            axis = 1
+        }
+        if extent.z > extent[axis] {
+            axis = 2
+        }
+        let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
+
+        // Sort to the left and right of split value
+        let mut i = node.first_prim;
+        let mut j = i + node.num_prims - 1;
+        while i <= j {
+            // For now, we use the first corner of each triangle as the centroid
+            // TODO: Use the actual centroid.
+            if objects[i as usize].centroid()[axis] < split_value {
+                i += 1;
+            } else {
+                objects.swap(i as usize, j as usize);
+                j -= 1;
+            }
+        }
+
+        // Initialize the two children nodes and go on to subidivide them
+        let left_idx  = bvh_node_index * 2 + 1;
+        let right_idx = bvh_node_index * 2 + 2;
+
+        let left_num = i - bvh[bvh_node_index as usize].first_prim;
+        let right_num = bvh[bvh_node_index as usize].num_prims - left_num;
+
+        eprintln!("left child: {} | right child: {}", left_num, right_num);
+
+        bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
+        bvh[left_idx as usize].num_prims = left_num;
+        bvh[right_idx as usize].first_prim = i;
+        bvh[right_idx as usize].num_prims = right_num;
+
+        // If this happens, the current node shall be a leaf.
+        if left_num == 0 || right_num == 0 {
+            return;
+        }
+
+        bvh[bvh_node_index as usize].left_child = left_idx;
+        bvh[bvh_node_index as usize].right_child = right_idx;
+        Self::subdivide(bvh, objects, left_idx);
+        Self::subdivide(bvh, objects, right_idx);
+    }
+
+}
+
+#[derive(Clone)]
 pub struct BVHMesh {
     triangles: Vec<Triangle>,
     nodes: Vec<BVHNode>,
     material: Material,
-}
-
-impl Debug for BVHMesh {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn print_node(
-            nodes: &Vec<BVHNode>,
-            idx: usize,
-            depth: usize,
-            f: &mut std::fmt::Formatter<'_>,
-        ) -> std::fmt::Result {
-            if idx >= nodes.len() {
-                return Ok(());
-            }
-            let node = &nodes[idx];
-            for _ in 0..depth {
-                write!(f, "  ")?;
-            }
-            writeln!(
-                f,
-                "Node {}: first_prim={}, num_prims={}, aabb=({}, {})",
-                idx,
-                node.first_prim,
-                node.num_prims,
-                format!("{:?}", node.aabb.min),
-                format!("{:?}", node.aabb.max)
-            )?;
-            if node.num_prims > 1 {
-                print_node(nodes, idx * 2 + 1, depth + 1, f)?;
-                print_node(nodes, idx * 2 + 2, depth + 1, f)?;
-            }
-            Ok(())
-        }
-        print_node(&self.nodes, 0, 0, f)
-    }
 }
 
 impl BVHMesh {
