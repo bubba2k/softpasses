@@ -1,3 +1,7 @@
+use std::path::Path;
+
+use num::traits::float::TotalOrder;
+
 use super::material::Material;
 use crate::math::ray::{Ray};
 use crate::math::vector::{self, project_onto_plane_normalized, CoordinatePlane, Vec3f, Float};
@@ -79,6 +83,7 @@ pub enum Hittable {
     Parallelogram(Parallelogram),
     Parallelepiped(Parallelepiped),
     Plane(Plane),
+    Mesh(Mesh),
 }
 
 impl HittableTrait for Hittable {
@@ -88,6 +93,7 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.get_aabb(),
             Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
             Hittable::Plane(plane) => plane.get_aabb(),
+            Hittable::Mesh(mesh) => mesh.get_aabb(),
         }
     }
 
@@ -97,6 +103,7 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.num_objects(),
             Hittable::Parallelogram(parallelogram) => parallelogram.num_objects(),
             Hittable::Plane(plane) => plane.num_objects(),
+            Hittable::Mesh(mesh) => mesh.num_objects(),
         }   
     }
 
@@ -106,6 +113,7 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.try_hit(ray, t_interval, num_bounces),
             Hittable::Parallelogram(parallelogram) => parallelogram.try_hit(ray, t_interval, num_bounces),
             Hittable::Plane(plane) => plane.try_hit(ray, t_interval, num_bounces),
+            Hittable::Mesh(mesh) => mesh.try_hit(ray, t_interval, num_bounces),
         }  
     }
 }
@@ -133,6 +141,14 @@ impl AABoundingBox {
             self.max.y.max(point.y),
             self.max.z.max(point.z),
         );
+
+        // Completely flat (among one of the axis) AABBs cause issues,
+        // mainly the hit impl below always returning false in that case.
+        // The simplest hack is to make sure it is never flat (unless empty) here.
+        if self.min.x == self.max.x { self.max.x += 0.0001 }
+        if self.min.y == self.max.y { self.max.y += 0.0001 }
+        if self.min.z == self.max.z { self.max.z += 0.0001 }
+
     }
 
     // Ray-box intersection using slabs method
@@ -528,5 +544,178 @@ impl Parallelepiped {
 
         let p = Parallelepiped::_new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material);
         Hittable::Parallelepiped(p)
+    }
+}
+
+fn ray_triangle_intersection(ray: &Ray, a: Vec3f, b: Vec3f, c: Vec3f) -> Option<Float> {
+    // Determine whether the ray is parallel
+    let edge1 = b - a;
+    let edge2 = c - a;
+    let h = ray.dir.cross(edge2);
+    let det = edge1.dot(h);   
+    // If det is close to 0, the ray is parallel to the triangle
+    if det.abs() < 1e-8 {
+        return None;
+    }   
+    let f = 1.0 / det;
+    let s = ray.orig - a;
+    let u = f * s.dot(h);   
+    if u < 0.0 || u > 1.0 {
+        return None;
+    }   
+    let q = s.cross(edge1);
+    let v = f * ray.dir.dot(q); 
+    if v < 0.0 || u + v > 1.0 {
+        return None;
+    }   
+    let t = f * edge2.dot(q);   
+
+    Some(t)
+}
+
+#[derive(Clone)]
+pub struct Mesh {
+    aabb: AABoundingBox,
+    // First 3: positions
+    // Next  3: normals
+    triangles: Vec<[Vec3f; 6]>,
+    material: Material,
+}
+
+impl Mesh {
+    pub fn from_obj_file(path: &Path, material: Material) -> Hittable {
+        const LOAD_OPTIONS: tobj::LoadOptions = tobj::LoadOptions {
+            single_index: true,
+            triangulate: true,
+            ignore_lines: true,
+            ignore_points: true,
+            reorder_data: false,
+        };
+
+        let (models, _) = 
+            tobj::load_obj(path, &LOAD_OPTIONS).expect("Failed to load OBJ file");
+        let mut positions = Vec::new();
+        let mut normals = Vec::new();
+
+        let mesh = &models[0].mesh;
+        // Have to reorder: We want all triangles to be in order, so use the indices
+        // to achieve that
+        // Copy triangle positions
+        for index  in mesh.indices.iter() {
+            let vert_idx = (*index as usize) * 3;
+            let vert = Vec3f::new(mesh.positions[vert_idx], 
+                                        mesh.positions[vert_idx + 1],
+                                        mesh.positions[vert_idx + 2]);
+            positions.push(vert);
+        }
+
+        // Do the same for normals
+        if !mesh.normals.is_empty() {
+            for index  in mesh.indices.iter() {
+                let vert_idx = (*index as usize) * 3;
+                let normal = Vec3f::new(mesh.normals[vert_idx], 
+                                          mesh.normals[vert_idx + 1],
+                                          mesh.normals[vert_idx + 2]);
+                normals.push(normal);
+            }        
+        } else {
+            // If there are no normals specified in the file, compute (flat) normals
+            // from vertex positions.
+            for tri in positions.chunks(3) {
+                let edge1 = tri[1] - tri[0];
+                let edge2 = tri[2] - tri[0];
+
+                let obj_normal = edge1.cross(edge2).normalize();
+
+                normals.push(obj_normal);
+                normals.push(obj_normal);
+                normals.push(obj_normal);
+            }
+        }
+
+        let mut aabb = AABoundingBox::default();
+        for vert in positions.iter() {
+            aabb.expand(vert);
+        }
+
+        // Group positions and normals
+        let mut triangles = Vec::new();
+        for i in (0..positions.len()).step_by(3) {
+            triangles.push([
+                positions[i + 0],
+                positions[i + 1],
+                positions[i + 2],
+                normals[i + 0],
+                normals[i + 1],
+                normals[i + 2],
+            ]
+            );       
+        }
+
+        Hittable::Mesh(Mesh {
+            aabb,
+            material,
+            triangles,
+        })
+    }
+}
+
+impl HittableTrait for Mesh {
+    fn num_objects(&self) -> u32 {
+        1
+    }
+
+    fn get_aabb(&self) -> AABoundingBox {
+        self.aabb.clone()
+    }
+
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+        // Do a simple aabb check
+        if !self.aabb.hit(ray, t_interval) { return None }
+
+        if let Some((tri_idx, t_hit)) = 
+        self.triangles.iter().enumerate().map(|(idx, tri)| {
+            if let Some(t) = ray_triangle_intersection(ray, tri[0], tri[1], tri[2]) {
+                Some((idx, t))
+            } else {
+                None
+            }
+        }).flatten().min_by(|(_, t1), (_, t2)| {
+            t1.total_cmp(t2)
+        }) {
+            if t_interval.contains(t_hit) {
+            let point_hit = ray.at(t_hit);
+
+            // Interpolate normal of the triangle. First, we have to find the barycentric
+            // coordinates, u, v, w.
+            let a = self.triangles[tri_idx][0];
+            let b = self.triangles[tri_idx][1];
+            let c = self.triangles[tri_idx][2];
+            let v0 = b - a;
+            let v1 = c - a;
+            let v2 = point_hit - a;
+            let d00 = v0.dot(v0);
+            let d01 = v0.dot(v1);
+            let d11 = v1.dot(v1);
+            let d20 = v2.dot(v0);
+            let d21 = v2.dot(v1);
+            let denom = d00 * d11 - d01 * d01;
+            let v = (d11 * d20 - d01 * d21) / denom;
+            let w = (d00 * d21 - d01 * d20) / denom;
+            let u = 1.0 - v - w;
+
+            // Now interpolate between the three corners.
+            let obj_normal = 
+                   (self.triangles[tri_idx][3] * u
+                +   self.triangles[tri_idx][4] * v            
+                +   self.triangles[tri_idx][5] * w).normalize();
+
+            Some(HitRecord::new(ray, t_hit, point_hit, num_bounces, &self.material, obj_normal))
+        } else {
+            None
+        }
+        } else {
+            None
+        }        
     }
 }
