@@ -150,12 +150,15 @@ fn estimate_render_time(
     let estimate_duration = estimate_start.elapsed().as_secs_f64() as Float
                                * settings.samples_per_pixel as Float  // Attenuate for actual spp value
                                * (1.0 / num_threads.clamp(1, 2) as Float); // Attenuate for thread count
-    let estimate_minutes = estimate_duration as u32 / 60;
+    let estimate_hours   = estimate_duration as u32 / 3600;
+    let estimate_minutes = (estimate_duration as u32 / 60) % 60;
     let estimate_seconds = estimate_duration as u32 % 60;
+
     let now = chrono::Local::now();
     eprintln!(
-        "Started at {}\nEst. render time: {:02}:{:02}",
+        "Started at {}\nEst. render time: {:02}:{:02}:{:02}",
         now.format("%H:%M:%S"),
+        estimate_hours,
         estimate_minutes,
         estimate_seconds
     );
