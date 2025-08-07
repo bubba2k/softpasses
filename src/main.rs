@@ -10,11 +10,11 @@ use std::path::Path;
 use math::util::Interval;
 use math::vector::{Color, Float, Vec3f, vec3};
 use tracer::camera::{self, Camera};
-use tracer::hittable::{Hittable, HittableList, Plane, Sphere};
-use tracer::material::{MatGlass, MatLambertDiffuse, MatPrincipled, Material, MaterialTrait};
+use tracer::hittable::{Hittable, HittableList, Plane, BVHMesh, Sphere};
+use tracer::material::{MatGlass, MatLambertDiffuse, MatPrincipled, Material, MaterialTrait, MatBounceDebug};
 
 use crate::tracer::hittable::{Mesh, Parallelepiped};
-use crate::tracer::material::MatFaceDebug;
+use crate::tracer::material::{MatFaceDebug, MatNormalDebug};
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
@@ -55,10 +55,10 @@ fn main() {
     let sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = Mesh::from_obj_file(Path::new("assets/teapot.obj"), mat_metal.clone());
+    let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_rough);
 
     let mut objects: HittableList = HittableList::default();
-    objects.push(floor);
+    // objects.push(floor);
     //    objects.push(sphere1);
     //    objects.push(sphere2);
     //    objects.push(sphere3);

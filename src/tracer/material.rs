@@ -121,12 +121,12 @@ impl MatBounceDebug {
 impl MaterialTrait for MatBounceDebug {
     fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         static COLOR_RED: Color = Vec3f::new(1.0, 0.0, 0.0);
-        static COLOR_LOW: Color = Vec3f::new(0.4, 0.4, 0.4);
+        static COLOR_LOW: Color = Vec3f::new(0.0, 0.0, 0.0);
         static COLOR_HIGH: Color = Vec3f::new(1.0, 1.0, 1.0);
         let color = if hit.num_bounces >= self.limit {
             COLOR_RED
         } else {
-            let t = hit.num_bounces as Float / self.limit as Float;
+            let t = hit.num_bounces as Float / (self.limit - 1) as Float;
             COLOR_LOW.lerp(COLOR_HIGH, t)
         };
 

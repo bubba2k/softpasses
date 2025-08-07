@@ -235,7 +235,7 @@ impl Scheduler for NaiveSingleThreadScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects.num_objects(),
+            num_objects: world.objects.num_primitives(),
         }
     }
 }
@@ -294,7 +294,7 @@ impl Scheduler for NaiveMultiThreadScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects.num_objects(),
+            num_objects: world.objects.num_primitives(),
         }
     }
 }
@@ -382,7 +382,7 @@ impl Scheduler for TiledScheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects.num_objects(),
+            num_objects: world.objects.num_primitives(),
         }
     }
 }
