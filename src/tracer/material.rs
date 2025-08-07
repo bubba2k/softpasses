@@ -1,10 +1,10 @@
-use rand::distr::Distribution;
 use rand::Rng;
+use rand::distr::Distribution;
 
-use crate::math::vector::{Vec3f, Color, vec3, Float};
-use crate::math::util;
-use crate::math::ray::Ray;
 use super::hittable::HitRecord;
+use crate::math::ray::Ray;
+use crate::math::util;
+use crate::math::vector::{Color, Float, Vec3f, vec3};
 
 pub trait MaterialTrait {
     // Returns None if the ray was absorbed.
@@ -47,7 +47,7 @@ impl MaterialTrait for Material {
 // To generate random Material enums
 impl Distribution<Material> for rand::distr::StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Material {
-        match rng.random_range(0..=3) { 
+        match rng.random_range(0..=3) {
             0 => Material::MatEmission(MatEmission::random_instance()),
             1 => Material::MatGlass(MatGlass::random_instance()),
             2 => Material::MatLambertDiffuse(MatLambertDiffuse::random_instance()),
@@ -68,12 +68,11 @@ impl MaterialTrait for MatNormalDebug {
             (-hit.normal + 1.0) * 0.5
         };
 
-        (None, 
-         Some(color))
+        (None, Some(color))
     }
 
     fn random_instance() -> Self {
-        MatNormalDebug {  }
+        MatNormalDebug {}
     }
 }
 
@@ -94,12 +93,11 @@ impl MaterialTrait for MatFaceDebug {
         } else {
             Color::new(1.0, 0.0, 0.0)
         };
-        (None, 
-         Some(color))
+        (None, Some(color))
     }
 
     fn random_instance() -> Self {
-        MatFaceDebug {  }
+        MatFaceDebug {}
     }
 }
 
@@ -116,18 +114,18 @@ pub struct MatBounceDebug {
 
 impl MatBounceDebug {
     pub fn new(limit: u32) -> Material {
-        Material::MatBounceDebug(MatBounceDebug{ limit: limit})
+        Material::MatBounceDebug(MatBounceDebug { limit: limit })
     }
 }
 
 impl MaterialTrait for MatBounceDebug {
     fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        static COLOR_RED:  Color = Vec3f::new(1.0, 0.0, 0.0);
-        static COLOR_LOW:  Color = Vec3f::new(0.4, 0.4, 0.4);
+        static COLOR_RED: Color = Vec3f::new(1.0, 0.0, 0.0);
+        static COLOR_LOW: Color = Vec3f::new(0.4, 0.4, 0.4);
         static COLOR_HIGH: Color = Vec3f::new(1.0, 1.0, 1.0);
         let color = if hit.num_bounces >= self.limit {
             COLOR_RED
-        } else {   
+        } else {
             let t = hit.num_bounces as Float / self.limit as Float;
             COLOR_LOW.lerp(COLOR_HIGH, t)
         };
@@ -147,7 +145,7 @@ pub struct MatLambertDiffuse {
 }
 
 impl MatLambertDiffuse {
-    // Note: We use brdf_lam = albedo, instead of the technically more correct 
+    // Note: We use brdf_lam = albedo, instead of the technically more correct
     // brdf_lam = albedo / pi. This is more convenient for users and means that
     // albedo is implicitely multiplied by pi.
     // Further reading: https://seblagarde.wordpress.com/2012/01/08/pi-or-not-to-pi-in-game-lighting-equation/
@@ -160,7 +158,7 @@ impl MaterialTrait for MatLambertDiffuse {
     #[allow(unused_variables)]
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         // Find the new scatter dir :)
-        let new_dir = (util::rand_unit_vec() + hit.normal).normalize(); 
+        let new_dir = (util::rand_unit_vec() + hit.normal).normalize();
         // Mr. Shirley said to catch the vectors that are "near zero".
         // Those can occur if the generated random vector is parallel but opposite direction
         // of the hit normal.
@@ -170,9 +168,11 @@ impl MaterialTrait for MatLambertDiffuse {
     }
 
     fn random_instance() -> Self {
-        let albedo = Vec3f::new(util::rand_range_f(0.0, 1.0),
-                                            util::rand_range_f(0.0, 1.0),
-                                             util::rand_range_f(0.0, 1.0));
+        let albedo = Vec3f::new(
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+        );
         MatLambertDiffuse { albedo: albedo }
     }
 }
@@ -183,7 +183,7 @@ fn vec_reflect(v_norm: &Vec3f, n_norm: &Vec3f) -> Vec3f {
 
 fn vec_refract(v: &Vec3f, n: &Vec3f, etai_over_etat: Float) -> Vec3f {
     let cos_theta = Float::min(-v.dot(*n), 1.0);
-    let r_out_perp =  (*v + (*n * cos_theta)) * etai_over_etat;
+    let r_out_perp = (*v + (*n * cos_theta)) * etai_over_etat;
     let r_out_parallel = *n * (-(1.0 - r_out_perp.length_squared()).abs().sqrt());
     r_out_perp + r_out_parallel
 }
@@ -206,7 +206,7 @@ pub struct MatPrincipled {
 
 impl MaterialTrait for MatPrincipled {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        if util::rand_bool(self.reflectiveness) { 
+        if util::rand_bool(self.reflectiveness) {
             // Either we do a (fuzzy) reflection...
             let fuzz_vec = util::rand_unit_vec() * self.gloss_fuzz;
             let reflect_vec = vec_reflect(&ray_in.dir, &hit.normal);
@@ -227,13 +227,19 @@ impl MaterialTrait for MatPrincipled {
     }
 
     fn random_instance() -> Self {
-        let albedo = Vec3f::new(util::rand_range_f(0.0, 1.0),
-                                            util::rand_range_f(0.0, 1.0),
-                                             util::rand_range_f(0.0, 1.0));
+        let albedo = Vec3f::new(
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+        );
         let refl = util::rand_range_f(0.0, 1.0);
         let gloss_fuzz = util::rand_range_f(0.0, 1.0);
 
-        MatPrincipled { albedo: albedo, reflectiveness: refl, gloss_fuzz: gloss_fuzz }
+        MatPrincipled {
+            albedo: albedo,
+            reflectiveness: refl,
+            gloss_fuzz: gloss_fuzz,
+        }
     }
 }
 
@@ -262,21 +268,23 @@ impl MaterialTrait for MatEmission {
     }
 
     fn random_instance() -> Self {
-        let albedo = Vec3f::new(util::rand_range_f(0.0, 1.0),
-                                            util::rand_range_f(0.0, 1.0),
-                                             util::rand_range_f(0.0, 1.0));
+        let albedo = Vec3f::new(
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+        );
         let strength = util::rand_range_f(0.0, 1.0);
 
-        MatEmission { color: albedo, strength: strength }
+        MatEmission {
+            color: albedo,
+            strength: strength,
+        }
     }
 }
 
 impl MatEmission {
     pub fn new(c: Color, strength: Float) -> Material {
-        Material::MatEmission(MatEmission {
-            color: c,
-            strength,
-        })
+        Material::MatEmission(MatEmission { color: c, strength })
     }
 }
 
@@ -291,7 +299,11 @@ impl MaterialTrait for MatGlass {
         let unit_direction = ray_in.dir;
 
         // Compute the relative index of refraction (ior) depending on whether the ray is entering or exiting the material.
-        let ior_rel = if hit.front_face { 1.0 / self.ior } else { self.ior };
+        let ior_rel = if hit.front_face {
+            1.0 / self.ior
+        } else {
+            self.ior
+        };
         // Calculate the cosine of the angle between the incoming ray and the surface normal.
         let cos_theta = Float::min(-unit_direction.dot(hit.normal), 1.0);
         // Calculate the sine of the angle using the Pythagorean identity.
@@ -303,7 +315,8 @@ impl MaterialTrait for MatGlass {
         let reflectance = schlick_approx(cos_theta, ior_rel);
 
         if cant_refract || reflectance > util::rand_range_f(0.0, 1.0) {
-            let ray_reflected = Ray::new(&hit.point, &vec_reflect(&unit_direction, &hit.normal)).step(0.0001);
+            let ray_reflected =
+                Ray::new(&hit.point, &vec_reflect(&unit_direction, &hit.normal)).step(0.0001);
             (Some(ray_reflected), Some(self.color))
         } else {
             let dir_refracted = vec_refract(&unit_direction, &hit.normal, ior_rel);
@@ -314,20 +327,22 @@ impl MaterialTrait for MatGlass {
     }
 
     fn random_instance() -> Self {
-        let albedo = Vec3f::new(util::rand_range_f(0.0, 1.0),
-                                            util::rand_range_f(0.0, 1.0),
-                                             util::rand_range_f(0.0, 1.0));
+        let albedo = Vec3f::new(
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+            util::rand_range_f(0.0, 1.0),
+        );
         let ior = util::rand_range_f(1.3, 1.8);
 
-        Self { color: albedo, ior: ior }
+        Self {
+            color: albedo,
+            ior: ior,
+        }
     }
 }
 
 impl MatGlass {
     pub fn new(c: Color, ior: Float) -> Material {
-        Material::MatGlass(MatGlass{
-            color: c,
-            ior: ior,
-        })
+        Material::MatGlass(MatGlass { color: c, ior: ior })
     }
 }

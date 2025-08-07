@@ -3,9 +3,9 @@ use std::path::Path;
 use num::traits::float::TotalOrder;
 
 use super::material::Material;
-use crate::math::ray::{Ray};
-use crate::math::vector::{self, project_onto_plane_normalized, CoordinatePlane, Vec3f, Float};
+use crate::math::ray::Ray;
 use crate::math::util::Interval;
+use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
 
 pub struct HitRecord<'a> {
     pub point: Vec3f,
@@ -17,7 +17,14 @@ pub struct HitRecord<'a> {
 }
 
 impl<'a> HitRecord<'a> {
-    pub fn new(ray: &Ray, t_hit: Float, point_hit: Vec3f, num_bounces: u32, obj_mat: &'a Material, obj_normal: Vec3f) -> Self {
+    pub fn new(
+        ray: &Ray,
+        t_hit: Float,
+        point_hit: Vec3f,
+        num_bounces: u32,
+        obj_mat: &'a Material,
+        obj_normal: Vec3f,
+    ) -> Self {
         // Check whether we hit the inside or outside
         if ray.dir.dot(obj_normal) > 0.0 {
             // Hit the "inside" of object. Flip the normal!
@@ -67,10 +74,11 @@ fn hit_sphere(ray: &Ray, center: &Vec3f, radius: Float) -> Option<Float> {
         let t2 = (-b - discriminant.sqrt()) / (2.0 * a);
         // Find and return the smaller, nonnegative value of both. (If exists)
         match (t1 >= 0.0, t2 >= 0.0) {
-        (true, true) => Some(t1.min(t2)),
-        (true, false) => Some(t1),
-        (false, true) => Some(t2),
-        (false, false) => None, }
+            (true, true) => Some(t1.min(t2)),
+            (true, false) => Some(t1),
+            (false, true) => Some(t2),
+            (false, false) => None,
+        }
     } else {
         // No hit, nothing
         None
@@ -104,17 +112,21 @@ impl HittableTrait for Hittable {
             Hittable::Parallelogram(parallelogram) => parallelogram.num_objects(),
             Hittable::Plane(plane) => plane.num_objects(),
             Hittable::Mesh(mesh) => mesh.num_objects(),
-        }   
+        }
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
-         match self {
+        match self {
             Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval, num_bounces),
-            Hittable::Parallelepiped(parallelepiped) => parallelepiped.try_hit(ray, t_interval, num_bounces),
-            Hittable::Parallelogram(parallelogram) => parallelogram.try_hit(ray, t_interval, num_bounces),
+            Hittable::Parallelepiped(parallelepiped) => {
+                parallelepiped.try_hit(ray, t_interval, num_bounces)
+            }
+            Hittable::Parallelogram(parallelogram) => {
+                parallelogram.try_hit(ray, t_interval, num_bounces)
+            }
             Hittable::Plane(plane) => plane.try_hit(ray, t_interval, num_bounces),
             Hittable::Mesh(mesh) => mesh.try_hit(ray, t_interval, num_bounces),
-        }  
+        }
     }
 }
 
@@ -145,10 +157,15 @@ impl AABoundingBox {
         // Completely flat (among one of the axis) AABBs cause issues,
         // mainly the hit impl below always returning false in that case.
         // The simplest hack is to make sure it is never flat (unless empty) here.
-        if self.min.x == self.max.x { self.max.x += 0.0001 }
-        if self.min.y == self.max.y { self.max.y += 0.0001 }
-        if self.min.z == self.max.z { self.max.z += 0.0001 }
-
+        if self.min.x == self.max.x {
+            self.max.x += 0.0001
+        }
+        if self.min.y == self.max.y {
+            self.max.y += 0.0001
+        }
+        if self.min.z == self.max.z {
+            self.max.z += 0.0001
+        }
     }
 
     // Ray-box intersection using slabs method
@@ -200,8 +217,10 @@ impl HittableTrait for HittableList {
         // For all objects, try hitting them, discard Nones, then find the one with the
         // smallest t.
         self.list
-            .iter().map(|x| x.try_hit(ray, t_interval, num_bounces))
-            .flatten().min_by(|x, y| x.t.total_cmp(&y.t))
+            .iter()
+            .map(|x| x.try_hit(ray, t_interval, num_bounces))
+            .flatten()
+            .min_by(|x, y| x.t.total_cmp(&y.t))
     }
 
     fn num_objects(&self) -> u32 {
@@ -209,7 +228,7 @@ impl HittableTrait for HittableList {
     }
 
     fn get_aabb(&self) -> AABoundingBox {
-        self.aabb.clone()   
+        self.aabb.clone()
     }
 }
 
@@ -237,9 +256,14 @@ impl HittableTrait for Sphere {
                 let point_hit = ray.at(t_hit);
                 let sphere_normal = (point_hit - self.center) / self.radius;
 
-                Some(HitRecord::new(ray, t_hit, point_hit, 
-                                num_bounces, &self.material, 
-                            sphere_normal))       
+                Some(HitRecord::new(
+                    ray,
+                    t_hit,
+                    point_hit,
+                    num_bounces,
+                    &self.material,
+                    sphere_normal,
+                ))
             } else {
                 None
             }
@@ -253,8 +277,10 @@ impl HittableTrait for Sphere {
     }
 
     fn get_aabb(&self) -> AABoundingBox {
-        AABoundingBox { min: self.center - Vec3f::new(self.radius, self.radius, self.radius),
-                         max: self.center + Vec3f::new(self.radius, self.radius, self.radius) }
+        AABoundingBox {
+            min: self.center - Vec3f::new(self.radius, self.radius, self.radius),
+            max: self.center + Vec3f::new(self.radius, self.radius, self.radius),
+        }
     }
 }
 
@@ -262,7 +288,7 @@ impl HittableTrait for Sphere {
 pub struct Plane {
     // The plane in HNF
     normal: Vec3f,
-    d: Float,    // Distance from origin
+    d: Float, // Distance from origin
     material: Material,
 }
 
@@ -271,14 +297,14 @@ impl Plane {
         Hittable::Plane(Plane {
             normal: normal,
             d: d,
-            material: mat, 
-       })
+            material: mat,
+        })
     }
 
     pub fn from_points(botleft: Vec3f, topleft: Vec3f, botright: Vec3f, mat: Material) -> Self {
         let right = botright - botleft;
         let up = topleft - botleft;
-        
+
         let normal = right.cross(up).normalize();
         let distance = (project_onto_plane_normalized(botleft, normal) - botleft).length();
 
@@ -312,7 +338,14 @@ impl HittableTrait for Plane {
         } else {
             let p_intersect = ray.at(t_intersect);
 
-            Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, &self.material, self.normal))
+            Some(HitRecord::new(
+                ray,
+                t_intersect,
+                p_intersect,
+                num_bounces,
+                &self.material,
+                self.normal,
+            ))
         }
     }
 
@@ -321,8 +354,10 @@ impl HittableTrait for Plane {
     }
 
     fn get_aabb(&self) -> AABoundingBox {
-        AABoundingBox { min: Vec3f::new(-Float::INFINITY, -Float::INFINITY, -Float::INFINITY),
-                        max: Vec3f::new(Float::INFINITY, Float::INFINITY, Float::INFINITY) }
+        AABoundingBox {
+            min: Vec3f::new(-Float::INFINITY, -Float::INFINITY, -Float::INFINITY),
+            max: Vec3f::new(Float::INFINITY, Float::INFINITY, Float::INFINITY),
+        }
     }
 }
 
@@ -330,10 +365,10 @@ impl HittableTrait for Plane {
 pub struct Parallelogram {
     // The plane the rectangle lies on in HNF
     normal: Vec3f,
-    d: Float,    
-    
+    d: Float,
+
     // The rectangles 4 corners (on the projection plane) point in CCW order
-    projected_bounds: [Vec3f;4],
+    projected_bounds: [Vec3f; 4],
 
     // The coordinate plane to project intersection point onto for bounds checking
     projection_plane: vector::CoordinatePlane,
@@ -342,13 +377,18 @@ pub struct Parallelogram {
 }
 
 impl Parallelogram {
-    pub fn from_points(bottom_left: Vec3f, top_left: Vec3f, bottom_right: Vec3f, mat: Material) -> Hittable {
+    pub fn from_points(
+        bottom_left: Vec3f,
+        top_left: Vec3f,
+        bottom_right: Vec3f,
+        mat: Material,
+    ) -> Hittable {
         // Together with `bottom_left`, these three letters form represent the plane in parametric form.
         let up = top_left - bottom_left;
         let right = bottom_right - bottom_left;
 
         let normal = right.cross(up).normalize();
-        let distance = (project_onto_plane_normalized(bottom_left,  normal) - bottom_left).length();
+        let distance = (project_onto_plane_normalized(bottom_left, normal) - bottom_left).length();
 
         let signed_distance = if normal.dot(bottom_left) >= 0.0 {
             distance
@@ -357,13 +397,18 @@ impl Parallelogram {
         };
 
         // Find the coordinate plane "most parallel" to the rect plane, but most importantly, also avoid any orthogonal ones.
-        let projection_plane = [CoordinatePlane::XY, CoordinatePlane::XZ, CoordinatePlane::YZ]
-            .map(|p| (p, p.normal())).iter()
-            .max_by(|a, b| a.1.dot(normal).abs().total_cmp(&b.1.dot(normal).abs()))
-            .map(|x| x.0).unwrap();
+        let projection_plane = [
+            CoordinatePlane::XY,
+            CoordinatePlane::XZ,
+            CoordinatePlane::YZ,
+        ]
+        .map(|p| (p, p.normal()))
+        .iter()
+        .max_by(|a, b| a.1.dot(normal).abs().total_cmp(&b.1.dot(normal).abs()))
+        .map(|x| x.0)
+        .unwrap();
 
-        let projected_bounds = 
-        match projection_plane {
+        let projected_bounds = match projection_plane {
             CoordinatePlane::XY => {
                 let projected_botleft = bottom_left;
                 let projected_botright = bottom_right;
@@ -371,12 +416,21 @@ impl Parallelogram {
                 let projected_topright = bottom_right + up;
 
                 if vector::PLANE_XY.dot(normal) > 0.0 {
-                    [projected_botleft, projected_botright, projected_topright, projected_topleft]
-
+                    [
+                        projected_botleft,
+                        projected_botright,
+                        projected_topright,
+                        projected_topleft,
+                    ]
                 } else {
-                    [projected_topleft, projected_topright, projected_botright, projected_botleft]
+                    [
+                        projected_topleft,
+                        projected_topright,
+                        projected_botright,
+                        projected_botleft,
+                    ]
                 }
-            },
+            }
             CoordinatePlane::XZ => {
                 // Project onto the XZ plane. So, drop the Y and replace it with the Z coord, since
                 // that is how the bounds checking function expects it later on.
@@ -387,11 +441,21 @@ impl Parallelogram {
                 let projected_topright = Vec3f::new(top_right.x, top_right.z, 0.0);
 
                 if vector::PLANE_XZ.dot(normal) > 0.0 {
-                    [projected_topleft, projected_topright, projected_botright, projected_botleft]
+                    [
+                        projected_topleft,
+                        projected_topright,
+                        projected_botright,
+                        projected_botleft,
+                    ]
                 } else {
-                    [projected_botleft, projected_botright, projected_topright, projected_topleft]
+                    [
+                        projected_botleft,
+                        projected_botright,
+                        projected_topright,
+                        projected_topleft,
+                    ]
                 }
-            },
+            }
             CoordinatePlane::YZ => {
                 // Project on XY plane. Drop X coordinate.
                 let projected_botleft = Vec3f::new(bottom_left.y, bottom_left.z, 0.0);
@@ -401,10 +465,19 @@ impl Parallelogram {
                 let projected_topright = Vec3f::new(top_right.y, top_right.z, 0.0);
 
                 if vector::PLANE_YZ.dot(normal) > 0.0 {
-                    [projected_botleft, projected_botright, projected_topright, projected_topleft]
-
+                    [
+                        projected_botleft,
+                        projected_botright,
+                        projected_topright,
+                        projected_topleft,
+                    ]
                 } else {
-                    [projected_topleft, projected_topright, projected_botright, projected_botleft]
+                    [
+                        projected_topleft,
+                        projected_topright,
+                        projected_botright,
+                        projected_botleft,
+                    ]
                 }
             }
         };
@@ -418,7 +491,7 @@ impl Parallelogram {
 
             material: mat,
         })
-    }   
+    }
 }
 
 impl HittableTrait for Parallelogram {
@@ -447,17 +520,26 @@ impl HittableTrait for Parallelogram {
             };
 
             // Check whether the point we found is inside the rectangles boundaries.
-            // Now perform the classic ole "left of all edges" check. Lets us know whether the projected point 
+            // Now perform the classic ole "left of all edges" check. Lets us know whether the projected point
             // lies inside the projected bounds.
-            let mut is_left_of_all = true; 
+            let mut is_left_of_all = true;
             for i in 0..4 {
                 let a = &self.projected_bounds[i];
                 let b = &self.projected_bounds[(i + 1) % 4];
-                if !vector::point_left_of_edge(&projected_intersect_point, a, b) { is_left_of_all = false; }
-            };
+                if !vector::point_left_of_edge(&projected_intersect_point, a, b) {
+                    is_left_of_all = false;
+                }
+            }
 
             if is_left_of_all {
-                Some(HitRecord::new(ray, t_intersect, p_intersect, num_bounces, &self.material, self.normal))
+                Some(HitRecord::new(
+                    ray,
+                    t_intersect,
+                    p_intersect,
+                    num_bounces,
+                    &self.material,
+                    self.normal,
+                ))
             } else {
                 None
             }
@@ -482,7 +564,7 @@ impl HittableTrait for Parallelogram {
 
 #[derive(Clone)]
 pub struct Parallelepiped {
-    // List of the 6 faces 
+    // List of the 6 faces
     list: HittableList,
     material: Material,
 }
@@ -502,7 +584,13 @@ impl HittableTrait for Parallelepiped {
 }
 
 impl Parallelepiped {
-    fn _new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Material) -> Self {
+    fn _new(
+        back_bottom_left: Vec3f,
+        back_bottom_right: Vec3f,
+        front_bottom_left: Vec3f,
+        back_top_left: Vec3f,
+        material: Material,
+    ) -> Self {
         let up = back_top_left - back_bottom_left;
         let depth = front_bottom_left - back_bottom_left;
 
@@ -515,34 +603,90 @@ impl Parallelepiped {
         let mut list: HittableList = HittableList::default();
 
         // Front face
-        list.push(Parallelogram::from_points(front_bottom_left, front_top_left, front_bottom_right, material.clone()));
+        list.push(Parallelogram::from_points(
+            front_bottom_left,
+            front_top_left,
+            front_bottom_right,
+            material.clone(),
+        ));
         // Back face
-        list.push(Parallelogram::from_points(back_bottom_left, back_top_left, back_bottom_right, material.clone()));
+        list.push(Parallelogram::from_points(
+            back_bottom_left,
+            back_top_left,
+            back_bottom_right,
+            material.clone(),
+        ));
         // Top face
-        list.push(Parallelogram::from_points(front_top_left, back_top_left, front_top_right, material.clone()));
+        list.push(Parallelogram::from_points(
+            front_top_left,
+            back_top_left,
+            front_top_right,
+            material.clone(),
+        ));
         // Bottom face
-        list.push(Parallelogram::from_points(back_bottom_left, front_bottom_left, back_bottom_right, material.clone()));
+        list.push(Parallelogram::from_points(
+            back_bottom_left,
+            front_bottom_left,
+            back_bottom_right,
+            material.clone(),
+        ));
         // Left face
-        list.push(Parallelogram::from_points(back_bottom_left, back_top_left, front_bottom_left, material.clone()));
+        list.push(Parallelogram::from_points(
+            back_bottom_left,
+            back_top_left,
+            front_bottom_left,
+            material.clone(),
+        ));
         // Right face
-        list.push(Parallelogram::from_points(back_bottom_right, back_top_right, front_bottom_right, material.clone()));
+        list.push(Parallelogram::from_points(
+            back_bottom_right,
+            back_top_right,
+            front_bottom_right,
+            material.clone(),
+        ));
 
-        Parallelepiped { list: list, material: material }
+        Parallelepiped {
+            list: list,
+            material: material,
+        }
     }
 
-    pub fn new(back_bottom_left: Vec3f, back_bottom_right: Vec3f, front_bottom_left: Vec3f, back_top_left: Vec3f, material: Material) -> Hittable {
-        Hittable::Parallelepiped(Self::_new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material))
+    pub fn new(
+        back_bottom_left: Vec3f,
+        back_bottom_right: Vec3f,
+        front_bottom_left: Vec3f,
+        back_top_left: Vec3f,
+        material: Material,
+    ) -> Hittable {
+        Hittable::Parallelepiped(Self::_new(
+            back_bottom_left,
+            back_bottom_right,
+            front_bottom_left,
+            back_top_left,
+            material,
+        ))
     }
- 
-    pub fn new_cube(front_bottom_left: Vec3f, right_dir: Vec3f, up_dir: Vec3f, size: Float, material: Material) -> Hittable {
+
+    pub fn new_cube(
+        front_bottom_left: Vec3f,
+        right_dir: Vec3f,
+        up_dir: Vec3f,
+        size: Float,
+        material: Material,
+    ) -> Hittable {
         let depth_dir = up_dir.cross(right_dir).normalize();
 
         let back_bottom_left = front_bottom_left + depth_dir * size;
         let back_bottom_right = back_bottom_left + right_dir.normalize() * size;
         let back_top_left = back_bottom_left + up_dir.normalize() * size;
 
-
-        let p = Parallelepiped::_new(back_bottom_left, back_bottom_right, front_bottom_left, back_top_left, material);
+        let p = Parallelepiped::_new(
+            back_bottom_left,
+            back_bottom_right,
+            front_bottom_left,
+            back_top_left,
+            material,
+        );
         Hittable::Parallelepiped(p)
     }
 }
@@ -552,33 +696,37 @@ fn ray_triangle_intersection(ray: &Ray, a: Vec3f, b: Vec3f, c: Vec3f) -> Option<
     let edge1 = b - a;
     let edge2 = c - a;
     let h = ray.dir.cross(edge2);
-    let det = edge1.dot(h);   
+    let det = edge1.dot(h);
     // If det is close to 0, the ray is parallel to the triangle
     if det.abs() < 1e-8 {
         return None;
-    }   
+    }
     let f = 1.0 / det;
     let s = ray.orig - a;
-    let u = f * s.dot(h);   
+    let u = f * s.dot(h);
     if u < 0.0 || u > 1.0 {
         return None;
-    }   
+    }
     let q = s.cross(edge1);
-    let v = f * ray.dir.dot(q); 
+    let v = f * ray.dir.dot(q);
     if v < 0.0 || u + v > 1.0 {
         return None;
-    }   
-    let t = f * edge2.dot(q);   
+    }
+    let t = f * edge2.dot(q);
 
     Some(t)
 }
 
 #[derive(Clone)]
+struct Triangle {
+    positions: [Vec3f; 3],
+    normals: [Vec3f; 3],
+}
+
+#[derive(Clone)]
 pub struct Mesh {
     aabb: AABoundingBox,
-    // First 3: positions
-    // Next  3: normals
-    triangles: Vec<[Vec3f; 6]>,
+    triangles: Vec<Triangle>,
     material: Material,
 }
 
@@ -592,8 +740,7 @@ impl Mesh {
             reorder_data: false,
         };
 
-        let (models, _) = 
-            tobj::load_obj(path, &LOAD_OPTIONS).expect("Failed to load OBJ file");
+        let (models, _) = tobj::load_obj(path, &LOAD_OPTIONS).expect("Failed to load OBJ file");
         let mut positions = Vec::new();
         let mut normals = Vec::new();
 
@@ -601,23 +748,27 @@ impl Mesh {
         // Have to reorder: We want all triangles to be in order, so use the indices
         // to achieve that
         // Copy triangle positions
-        for index  in mesh.indices.iter() {
+        for index in mesh.indices.iter() {
             let vert_idx = (*index as usize) * 3;
-            let vert = Vec3f::new(mesh.positions[vert_idx], 
-                                        mesh.positions[vert_idx + 1],
-                                        mesh.positions[vert_idx + 2]);
+            let vert = Vec3f::new(
+                mesh.positions[vert_idx],
+                mesh.positions[vert_idx + 1],
+                mesh.positions[vert_idx + 2],
+            );
             positions.push(vert);
         }
 
         // Do the same for normals
         if !mesh.normals.is_empty() {
-            for index  in mesh.indices.iter() {
+            for index in mesh.indices.iter() {
                 let vert_idx = (*index as usize) * 3;
-                let normal = Vec3f::new(mesh.normals[vert_idx], 
-                                          mesh.normals[vert_idx + 1],
-                                          mesh.normals[vert_idx + 2]);
+                let normal = Vec3f::new(
+                    mesh.normals[vert_idx],
+                    mesh.normals[vert_idx + 1],
+                    mesh.normals[vert_idx + 2],
+                );
                 normals.push(normal);
-            }        
+            }
         } else {
             // If there are no normals specified in the file, compute (flat) normals
             // from vertex positions.
@@ -641,15 +792,10 @@ impl Mesh {
         // Group positions and normals
         let mut triangles = Vec::new();
         for i in (0..positions.len()).step_by(3) {
-            triangles.push([
-                positions[i + 0],
-                positions[i + 1],
-                positions[i + 2],
-                normals[i + 0],
-                normals[i + 1],
-                normals[i + 2],
-            ]
-            );       
+            triangles.push(Triangle {
+                positions: [positions[i + 0], positions[i + 1], positions[i + 2]],
+                normals: [normals[i + 0], normals[i + 1], normals[i + 2]],
+            });
         }
 
         Hittable::Mesh(Mesh {
@@ -671,51 +817,69 @@ impl HittableTrait for Mesh {
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Do a simple aabb check
-        if !self.aabb.hit(ray, t_interval) { return None }
+        if !self.aabb.hit(ray, t_interval) {
+            return None;
+        }
 
-        if let Some((tri_idx, t_hit)) = 
-        self.triangles.iter().enumerate().map(|(idx, tri)| {
-            if let Some(t) = ray_triangle_intersection(ray, tri[0], tri[1], tri[2]) {
-                Some((idx, t))
+        if let Some((tri_idx, t_hit)) = self
+            .triangles
+            .iter()
+            .enumerate()
+            .map(|(idx, tri)| {
+                if let Some(t) = ray_triangle_intersection(
+                    ray,
+                    tri.positions[0],
+                    tri.positions[1],
+                    tri.positions[2],
+                ) {
+                    Some((idx, t))
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .min_by(|(_, t1), (_, t2)| t1.total_cmp(t2))
+        {
+            if t_interval.contains(t_hit) {
+                let point_hit = ray.at(t_hit);
+
+                // Interpolate normal of the triangle. First, we have to find the barycentric
+                // coordinates, u, v, w.
+                let a = self.triangles[tri_idx].positions[0];
+                let b = self.triangles[tri_idx].positions[1];
+                let c = self.triangles[tri_idx].positions[2];
+                let v0 = b - a;
+                let v1 = c - a;
+                let v2 = point_hit - a;
+                let d00 = v0.dot(v0);
+                let d01 = v0.dot(v1);
+                let d11 = v1.dot(v1);
+                let d20 = v2.dot(v0);
+                let d21 = v2.dot(v1);
+                let denom = d00 * d11 - d01 * d01;
+                let v = (d11 * d20 - d01 * d21) / denom;
+                let w = (d00 * d21 - d01 * d20) / denom;
+                let u = 1.0 - v - w;
+
+                // Now interpolate between the three corners.
+                let obj_normal = (self.triangles[tri_idx].normals[0] * u
+                    + self.triangles[tri_idx].normals[1] * v
+                    + self.triangles[tri_idx].normals[2] * w)
+                    .normalize();
+
+                Some(HitRecord::new(
+                    ray,
+                    t_hit,
+                    point_hit,
+                    num_bounces,
+                    &self.material,
+                    obj_normal,
+                ))
             } else {
                 None
             }
-        }).flatten().min_by(|(_, t1), (_, t2)| {
-            t1.total_cmp(t2)
-        }) {
-            if t_interval.contains(t_hit) {
-            let point_hit = ray.at(t_hit);
-
-            // Interpolate normal of the triangle. First, we have to find the barycentric
-            // coordinates, u, v, w.
-            let a = self.triangles[tri_idx][0];
-            let b = self.triangles[tri_idx][1];
-            let c = self.triangles[tri_idx][2];
-            let v0 = b - a;
-            let v1 = c - a;
-            let v2 = point_hit - a;
-            let d00 = v0.dot(v0);
-            let d01 = v0.dot(v1);
-            let d11 = v1.dot(v1);
-            let d20 = v2.dot(v0);
-            let d21 = v2.dot(v1);
-            let denom = d00 * d11 - d01 * d01;
-            let v = (d11 * d20 - d01 * d21) / denom;
-            let w = (d00 * d21 - d01 * d20) / denom;
-            let u = 1.0 - v - w;
-
-            // Now interpolate between the three corners.
-            let obj_normal = 
-                   (self.triangles[tri_idx][3] * u
-                +   self.triangles[tri_idx][4] * v            
-                +   self.triangles[tri_idx][5] * w).normalize();
-
-            Some(HitRecord::new(ray, t_hit, point_hit, num_bounces, &self.material, obj_normal))
         } else {
             None
         }
-        } else {
-            None
-        }        
     }
 }

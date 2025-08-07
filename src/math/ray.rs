@@ -1,4 +1,4 @@
-use crate::math::vector::{Vec3f, Float};
+use crate::math::vector::{Float, Vec3f};
 
 #[derive(Debug, Clone)]
 pub struct Ray {
@@ -6,10 +6,12 @@ pub struct Ray {
     pub dir: Vec3f,
 }
 
-
 impl Ray {
     pub fn new(origin: &Vec3f, dir: &Vec3f) -> Self {
-        Ray { orig: origin.clone(), dir: dir.clone() }
+        Ray {
+            orig: origin.clone(),
+            dir: dir.clone(),
+        }
     }
 
     pub fn at(&self, t: Float) -> Vec3f {

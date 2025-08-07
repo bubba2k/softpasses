@@ -1,4 +1,4 @@
-use crate::math::vector::{Vec3f, Float};
+use crate::math::vector::{Float, Vec3f};
 
 #[derive(Clone, Copy)]
 pub struct Interval {
@@ -7,14 +7,17 @@ pub struct Interval {
 }
 
 impl Interval {
-    pub const EMPTY:    Self = Interval { min: Float::INFINITY, max: Float::NEG_INFINITY };
-    pub const UNIVERSE: Self = Interval { min: Float::NEG_INFINITY, max: Float::INFINITY };
+    pub const EMPTY: Self = Interval {
+        min: Float::INFINITY,
+        max: Float::NEG_INFINITY,
+    };
+    pub const UNIVERSE: Self = Interval {
+        min: Float::NEG_INFINITY,
+        max: Float::INFINITY,
+    };
 
     pub fn new(min: Float, max: Float) -> Self {
-        Interval {
-            min: min,
-            max: max,
-        }
+        Interval { min: min, max: max }
     }
 
     pub fn size(&self) -> Float {
@@ -62,9 +65,10 @@ pub fn rand_range_f(low: Float, high: Float) -> Float {
 }
 
 pub fn rand_vec3_range(min: Float, max: Float) -> Vec3f {
-    Vec3f::new( rand_range_f(min, max), 
-                rand_range_f(min, max), 
-                rand_range_f(min, max),
+    Vec3f::new(
+        rand_range_f(min, max),
+        rand_range_f(min, max),
+        rand_range_f(min, max),
     )
 }
 
@@ -83,8 +87,7 @@ pub fn rand_unit_vec() -> Vec3f {
 
 pub fn rand_vec_on_unit_disc() -> Vec3f {
     loop {
-        let vec = Vec3f::new(rand_range_f(-1.0, 1.0),
-                                          rand_range_f(-1.0, 1.0), 0.0);
+        let vec = Vec3f::new(rand_range_f(-1.0, 1.0), rand_range_f(-1.0, 1.0), 0.0);
 
         if vec.length_squared() < 1.0 {
             return vec;

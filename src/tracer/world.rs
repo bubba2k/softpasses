@@ -1,5 +1,8 @@
-use crate::{math::vector::{Color, Vec3f, vec3, Float}, tracer::hittable::HittableList};
 use crate::tracer::texture::Texture;
+use crate::{
+    math::vector::{Color, Float, Vec3f, vec3},
+    tracer::hittable::HittableList,
+};
 
 #[derive(Clone)]
 pub struct World {
@@ -37,7 +40,7 @@ impl Background {
     }
 
     pub fn sample(&self, dir: Vec3f) -> Color {
-        match self  {
+        match self {
             Background::Solid(color) => color.clone(),
             Background::Custom(f) => f(dir),
             Background::EnvironmentMap(tex, rot) => {

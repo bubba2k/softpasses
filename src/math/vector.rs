@@ -40,8 +40,7 @@ impl CoordinatePlane {
 pub fn point_left_of_edge(point: &Vec3f, q: &Vec3f, r: &Vec3f) -> bool {
     let p = point;
 
-    let det = p.x * q.y + p.y * r.x + q.x * r.y 
-            - r.x * q.y - r.y * p.x - q.x * p.y;
+    let det = p.x * q.y + p.y * r.x + q.x * r.y - r.x * q.y - r.y * p.x - q.x * p.y;
 
     det > 0.0
 }
