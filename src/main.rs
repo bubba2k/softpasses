@@ -17,14 +17,14 @@ use tracer::material::{
     MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
     Material, MaterialTrait,
 };
-
-use crate::tracer::render::{Scheduler, TiledScheduler};
+#[allow(unused_imports)]
+use crate::tracer::render::{Scheduler, TiledScheduler, NaiveMultiThreadScheduler, NaiveSingleThreadScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
 fn main() {
-    let width: u32 = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32 = 1280 / 2;
+    let height: u32 = 1024 / 2;
     let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 4.3, 18.0), Vec3f::new(0.0, 2.0, 0.0));
@@ -69,8 +69,6 @@ fn main() {
     let world = World::new(objects, background);
 
     let render_result = TiledScheduler::new(64).render(camera, settings, &world);
-    // NaiveMultiThread Sched seems to be faster for the simple scene right now. But lets keep using the Tiled one.
-    // let render_result = NaiveMultiThreadScheduler::new(3).render(camera, settings, &world);
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);

@@ -268,7 +268,13 @@ impl Scheduler for NaiveMultiThreadScheduler {
         let spp_per_thread = settings.samples_per_pixel / num_threads;
         let images: Vec<Vec<Color>> = (0..num_threads)
             .into_par_iter()
-            .map(|_| render_region(&camera, &settings, &world, region.clone()))
+            .map(|_| { 
+                let thread_settings = RenderSettings { 
+                    samples_per_pixel: spp_per_thread,
+                    ..settings    
+                };
+                render_region(&camera, &thread_settings, &world, region.clone())
+            })
             .collect();
 
         // Perform weighted sum of all generated images.
