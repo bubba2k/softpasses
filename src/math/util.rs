@@ -33,7 +33,7 @@ impl Interval {
     }
 
     pub fn clamp(&self, x: Float) -> Float {
-        num::clamp(x, self.min, self.max)
+        x.clamp(self.min, self.max)
     }
 }
 
@@ -57,7 +57,7 @@ impl ImageRegion {
 }
 
 pub fn linear_to_gamma(linear_component: Float) -> Float {
-    num::clamp(linear_component, 0.0, 1.0).sqrt()
+    linear_component.clamp(0.0, 1.0).sqrt()
 }
 
 pub fn rand_range_f(low: Float, high: Float) -> Float {

@@ -247,8 +247,8 @@ impl MatPrincipled {
     pub fn new(c: Color, refl: Float, fuzz: Float) -> Material {
         Material::MatPrincipled(MatPrincipled {
             albedo: c,
-            reflectiveness: num::clamp(refl, 0.0, 1.0),
-            gloss_fuzz: num::clamp(fuzz, 0.0, 1.0),
+            reflectiveness: refl.clamp(0.0, 1.0),
+            gloss_fuzz: fuzz.clamp(0.0, 1.0),
         })
     }
 }
