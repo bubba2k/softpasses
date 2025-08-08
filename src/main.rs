@@ -5,10 +5,11 @@ mod io;
 mod math;
 mod tracer;
 
+use std::default;
 use std::path::Path;
 
 use math::util::Interval;
-use math::vector::{Float, Vec3f, vec3};
+use math::vector::{Float, Vec3f, vec3, Pixel};
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
 use tracer::hittable::{BVHMesh, Hittable, Mesh, Parallelepiped, Plane, Sphere};
@@ -17,6 +18,7 @@ use tracer::material::{
     MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
     Material, MaterialTrait,
 };
+use crate::tracer::render;
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
@@ -73,6 +75,9 @@ fn main() {
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
 
-    let ppm_string = io::ppm::ppm_image(width, height, &render_result.pixels, comment_string);
+    let denoised_image = render::denoise(&render_result.colors, width as usize, height as usize);
+
+    let pixels: Vec<Pixel> = denoised_image.iter().map(render::color_to_pixel).collect();
+    let ppm_string = io::ppm::ppm_image(width, height, &pixels[..], comment_string);
     print!("{}", ppm_string);
 }

@@ -164,7 +164,7 @@ fn estimate_render_time(
     );
 }
 
-fn color_to_pixel(c: &Color) -> Pixel {
+pub fn color_to_pixel(c: &Color) -> Pixel {
     let r = util::linear_to_gamma(c[0]);
     let g = util::linear_to_gamma(c[1]);
     let b = util::linear_to_gamma(c[2]);
@@ -181,7 +181,7 @@ pub struct RenderSettings {
 }
 
 pub struct RenderResult {
-    pub pixels: Vec<Pixel>,
+    pub colors: Vec<Color>,
     pub time_elapsed: Float,
 
     pub image_height: u32,
@@ -230,10 +230,8 @@ impl Scheduler for NaiveSingleThreadScheduler {
         let region = ImageRegion::whole_image(settings.image_width, settings.image_height);
         let image = render_region(&camera, &settings, &world, region);
 
-        let image_pixels = image.iter().map(color_to_pixel).collect();
-
         RenderResult {
-            pixels: image_pixels,
+            colors: image,
             time_elapsed: start.elapsed().as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,
@@ -294,11 +292,10 @@ impl Scheduler for NaiveMultiThreadScheduler {
         for i in 0..len {
             result[i] = result[i] * weight
         }
-        let pixels = result.iter().map(color_to_pixel).collect();
         let duration = start.elapsed();
         eprintln!("Done in {:?} with {} threads.", duration, num_threads);
         RenderResult {
-            pixels: pixels,
+            colors: result,
             time_elapsed: duration.as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,
@@ -372,7 +369,7 @@ impl Scheduler for TiledScheduler {
             flattened_colors
         };
 
-        let pixels = rendered_tiles
+        let colors = rendered_tiles
             .chunks(num_tiles_hor as usize)
             .map(|tile_row| {
                 // The first tile in every row is guaranted to have full width, so we can use
@@ -382,11 +379,10 @@ impl Scheduler for TiledScheduler {
             })
             // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
             .flatten()
-            .map(|c| color_to_pixel(&c))
             .collect();
 
         RenderResult {
-            pixels: pixels,
+            colors: colors,
             time_elapsed: begin.elapsed().as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,
@@ -395,4 +391,64 @@ impl Scheduler for TiledScheduler {
             num_objects: world.objects_bvh.num_primitives(),
         }
     }
+}
+
+fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Vec<Color>>, image_width: usize, image_height: usize) -> Vec<Color> {
+
+    eprintln!("Denoising...");
+    let noisy_image: Vec<Float> = image.iter().map(|c| {
+        [c[0], c[1], c[2]]
+    }).flatten().collect();
+    let mut denoised_image = vec![f32::default(); (image_width * image_height * 3) as usize];
+    let denoise_device = oidn::Device::new();
+
+    match (albedo, normals) {
+        (None, _) => { 
+            oidn::RayTracing::new(&denoise_device)
+            .srgb(false)
+            .image_dimensions(image_width as usize, image_height as usize)
+            .filter(&noisy_image, &mut denoised_image)
+            .expect("Denoise filter config error.");
+        },
+        (Some(albedo), None) => {
+            let albedo_flattened: Vec<f32> = albedo.iter().map(|c| {
+                [c[0], c[1], c[2]]
+            }).flatten().collect();
+
+            oidn::RayTracing::new(&denoise_device)
+            .srgb(false)
+            .image_dimensions(image_width as usize, image_height as usize)
+            .albedo(&albedo_flattened)
+            .filter(&noisy_image, &mut denoised_image)
+            .expect("Denoise filter config error.");
+        },
+        (Some(albedo), Some(normal)) => {
+            let albedo_flattened: Vec<f32> = albedo.iter().map(|c| {
+                [c[0], c[1], c[2]]
+            }).flatten().collect();
+            let normals_flattened: Vec<f32> = normal.iter().map(|c| {
+                [c[0], c[1], c[2]]
+            }).flatten().collect();
+
+            oidn::RayTracing::new(&denoise_device)
+            .srgb(false)
+            .image_dimensions(image_width as usize, image_height as usize)
+            .albedo_normal(&albedo_flattened, &normals_flattened)
+            .filter(&noisy_image, &mut denoised_image)
+            .expect("Denoise filter config error.");
+        }
+
+    }
+
+    if let Err(e) = denoise_device.get_error() {
+        eprintln!("Error denoising image: {}", e.1);
+    }
+
+    denoised_image.chunks(3).map(|c| {
+        Color::new(c[0], c[1], c[2])
+    }).collect()
+}
+
+pub fn denoise(image: &Vec<Color>, image_width: usize, image_height: usize) -> Vec<Color> {
+    _denoise(image, None, None, image_width, image_height)
 }
