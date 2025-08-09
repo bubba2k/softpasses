@@ -9,7 +9,8 @@ use std::default;
 use std::path::Path;
 
 use math::util::Interval;
-use math::vector::{Float, Vec3f, vec3, Pixel};
+use math::vector::{Float, Vec3f, vec3};
+use math::transform::{Transform, Transformable};
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
 use tracer::hittable::{BVHMesh, Hittable, Mesh, Parallelepiped, Plane, Sphere};
@@ -25,14 +26,14 @@ use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
 fn main() {
-    let width: u32 = 1280 / 2;
-    let height: u32 = 1024 / 2;
+    let width: u32 = 1280 / 4;
+    let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 4.3, 18.0), Vec3f::new(0.0, 2.0, 0.0));
     let lens = camera::Lens::new(15, 35, aspect_ratio, 18.1, 0.0);
     let settings = tracer::render::RenderSettings {
-        samples_per_pixel: 16,
+        samples_per_pixel: 8,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -59,7 +60,12 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_rough);
+    let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_rough)
+            .apply_transform(&Transform::new()
+                .scale(glam::vec3(1.0, 1.5, 1.0))
+                .translate(glam::vec3(0.0, 1.0, 0.))
+                .rotate_z(0.1)
+            );
 
     let objects = vec![teapot, floor];
 

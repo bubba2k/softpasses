@@ -2,6 +2,7 @@ use super::material::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
+use crate::math::transform::{Transform, Transformable};
 use std::path::Path;
 
 pub struct HitRecord<'a> {
@@ -92,6 +93,20 @@ pub enum Hittable {
     Plane(Plane),
     Mesh(Mesh),
     BVHMesh(BVHMesh),
+}
+
+impl Transformable for Hittable {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        match self {
+            Hittable::Sphere(sphere) => Hittable::Sphere(sphere.apply_transform(transform)),
+            Hittable::Parallelepiped(parallelepiped) => Hittable::Parallelepiped(parallelepiped.apply_transform(transform)),
+            Hittable::Parallelogram(parallelogram) => Hittable::Parallelogram(parallelogram.apply_transform(transform)),
+            Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
+            Hittable::Mesh(mesh) => Hittable::Mesh(mesh.apply_transform(transform)),
+            Hittable::BVHMesh(bvh_mesh) => Hittable::BVHMesh(bvh_mesh.apply_transform(transform)),
+        }
+    }
+
 }
 
 impl HittableTrait for Hittable {
@@ -273,6 +288,12 @@ impl Sphere {
     }
 }
 
+impl Transformable for Sphere {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
+}
+
 impl HittableTrait for Sphere {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
@@ -352,6 +373,12 @@ impl Plane {
     }
 }
 
+impl Transformable for Plane {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
+}
+
 impl HittableTrait for Plane {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if parallel
@@ -406,6 +433,12 @@ pub struct Parallelogram {
     projection_plane: vector::CoordinatePlane,
 
     material: Material,
+}
+
+impl Transformable for Parallelogram {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
 }
 
 impl Parallelogram {
@@ -609,6 +642,12 @@ pub struct Parallelepiped {
     material: Material,
 }
 
+impl Transformable for Parallelepiped {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
+}
+
 impl HittableTrait for Parallelepiped {
     fn num_primitives(&self) -> u32 {
         6
@@ -742,6 +781,19 @@ struct Triangle {
     centroid: Vec3f,
 }
 
+impl Transformable for Triangle {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        let affine = transform.get_affine();
+        let normal_mat = affine.matrix3.inverse().transpose();
+
+        Triangle {
+            positions: self.positions.into_iter().map(|p| affine.transform_point3a(p) ).collect::<Vec<Vec3f>>().try_into().unwrap(),
+            normals: self.positions.into_iter().map(|p| (normal_mat * p).normalize() ).collect::<Vec<Vec3f>>().try_into().unwrap(),
+            centroid: affine.transform_point3a(self.centroid),
+        }
+    }
+}
+
 impl Triangle {
     fn ray_intersection(&self, ray: &Ray, interval: &Interval) -> Option<Float> {
         let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
@@ -809,6 +861,7 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
 
 impl<T: HittableTrait> BVH<T> {
     pub fn new(mut list: Vec<T>) -> BVH<T> {
+        eprintln!("Building scene bvh");
         let num_objs = list.len();
 
         // Assume one triangle per leaf
@@ -885,7 +938,7 @@ impl<T: HittableTrait> BVH<T> {
         // Sort to the left and right of split value
         let mut i = node.first_prim;
         let mut j = i + node.num_prims - 1;
-        while i <= j {
+        while i < j + 1 {
             // For now, we use the first corner of each triangle as the centroid
             // TODO: Use the actual centroid.
             if objects[i as usize].centroid()[axis] < split_value {
@@ -922,11 +975,105 @@ impl<T: HittableTrait> BVH<T> {
     }
 }
 
+fn subdivide(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<Triangle>, bvh_node_index: u32) {
+    // Always split along longest axis for now
+    let node = &mut bvh[bvh_node_index as usize];
+    if node.num_prims == 1 {
+        // For leaf nodes, we do not initalize the aabb or anything like that
+        return;
+    }
+    let begin = node.first_prim as usize;
+    let end = (node.first_prim + node.num_prims) as usize;
+    for tri in triangles[begin..end].iter() {
+        node.aabb.expand(&tri.positions[0]);
+        node.aabb.expand(&tri.positions[1]);
+        node.aabb.expand(&tri.positions[2]);
+    }
+    let extent = node.aabb.max - node.aabb.min;
+    // Split along the longest axis, determine split value
+    let mut axis = 0;
+    if extent.y > extent.x {
+        axis = 1
+    }
+    if extent.z > extent[axis] {
+        axis = 2
+    }
+    let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
+    // Sort to the left and right of split value
+    let mut i = node.first_prim;
+    let mut j = i + node.num_prims - 1;
+    while i < j + 1 {
+        // For now, we use the first corner of each triangle as the centroid
+        // TODO: Use the actual centroid.
+        if triangles[i as usize].centroid[axis] < split_value {
+            i += 1;
+        } else {
+            triangles.swap(i as usize, j as usize);
+            j -= 1;
+        }
+    }
+    // Initialize the two children nodes and go on to subidivide them
+    let left_idx = bvh_node_index * 2 + 1;
+    let right_idx = bvh_node_index * 2 + 2;
+    let left_num = i - bvh[bvh_node_index as usize].first_prim;
+    let right_num = bvh[bvh_node_index as usize].num_prims - left_num;
+    eprintln!("left child: {} | right child: {}", left_num, right_num);
+    bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
+    bvh[left_idx as usize].num_prims = left_num;
+    bvh[right_idx as usize].first_prim = i;
+    bvh[right_idx as usize].num_prims = right_num;
+    // If this happens, the current node shall be a leaf.
+    if left_num == 0 || right_num == 0 {
+        return;
+    }
+    bvh[bvh_node_index as usize].left_child = left_idx;
+    bvh[bvh_node_index as usize].right_child = right_idx;
+    subdivide(bvh, triangles, left_idx);
+    subdivide(bvh, triangles, right_idx);
+}
+
+fn build_bvh(mut primitives: Vec<Triangle>) -> (Vec<Triangle>, Vec<BVHNode>) {
+    // The recursive func to build the BVH search tree
+
+    eprintln!("Building BVH.");
+    let num_prims = primitives.len();
+
+    // Assume one triangle per leaf
+    let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 3 * num_prims - 1];
+    // Set the root node
+    bvh_nodes[0].first_prim = 0;
+    bvh_nodes[0].num_prims = num_prims as u32;
+
+    subdivide(&mut bvh_nodes, &mut primitives, 0);
+
+    eprintln!("Built BVH.");
+    (primitives, bvh_nodes)
+}
+
 #[derive(Clone)]
 pub struct BVHMesh {
     triangles: Vec<Triangle>,
     nodes: Vec<BVHNode>,
     material: Material,
+}
+
+impl Transformable for BVHMesh {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        // 1. Apply transform to vertex positions and normals
+        let transformed_triangles: Vec<Triangle> = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
+
+        eprintln!("Transformed {} triangles", transformed_triangles.len());
+        // 2. Rebuild BVH (technically only need to this when transform
+        //    includes rotation. 
+        // TODO
+        let (new_triangles, new_bvh_nodes) = build_bvh(transformed_triangles);
+
+        BVHMesh {
+            triangles: new_triangles,
+            nodes: new_bvh_nodes,
+            ..self
+        }
+    }
 }
 
 impl BVHMesh {
@@ -936,90 +1083,14 @@ impl BVHMesh {
         Hittable::BVHMesh(bvh_mesh)
     }
 
-    fn new(mut triangles: Vec<Triangle>, material: Material) -> Self {
-        let num_tris = triangles.len();
-
-        // Assume one triangle per leaf
-        let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * num_tris - 1];
-
-        // Set the root node
-        bvh_nodes[0].first_prim = 0;
-        bvh_nodes[0].num_prims = num_tris as u32;
-
-        Self::subdivide(&mut bvh_nodes, &mut triangles, 0);
+    fn new(triangles: Vec<Triangle>, material: Material) -> Self {
+        let (triangles, bvh_nodes) = build_bvh(triangles);
 
         Self {
             triangles: triangles,
             nodes: bvh_nodes,
             material: material,
         }
-    }
-
-    fn subdivide(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<Triangle>, bvh_node_index: u32) {
-        // Always split along longest axis for now
-        let node = &mut bvh[bvh_node_index as usize];
-        if node.num_prims == 1 {
-            // For leaf nodes, we do not initalize the aabb or anything like that
-            return;
-        }
-
-        let begin = node.first_prim as usize;
-        let end = (node.first_prim + node.num_prims) as usize;
-        for tri in triangles[begin..end].iter() {
-            node.aabb.expand(&tri.positions[0]);
-            node.aabb.expand(&tri.positions[1]);
-            node.aabb.expand(&tri.positions[2]);
-        }
-
-        let extent = node.aabb.max - node.aabb.min;
-
-        // Split along the longest axis, determine split value
-        let mut axis = 0;
-        if extent.y > extent.x {
-            axis = 1
-        }
-        if extent.z > extent[axis] {
-            axis = 2
-        }
-        let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
-
-        // Sort to the left and right of split value
-        let mut i = node.first_prim;
-        let mut j = i + node.num_prims - 1;
-        while i <= j {
-            // For now, we use the first corner of each triangle as the centroid
-            // TODO: Use the actual centroid.
-            if triangles[i as usize].centroid[axis] < split_value {
-                i += 1;
-            } else {
-                triangles.swap(i as usize, j as usize);
-                j -= 1;
-            }
-        }
-
-        // Initialize the two children nodes and go on to subidivide them
-        let left_idx = bvh_node_index * 2 + 1;
-        let right_idx = bvh_node_index * 2 + 2;
-
-        let left_num = i - bvh[bvh_node_index as usize].first_prim;
-        let right_num = bvh[bvh_node_index as usize].num_prims - left_num;
-
-        eprintln!("left child: {} | right child: {}", left_num, right_num);
-
-        bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
-        bvh[left_idx as usize].num_prims = left_num;
-        bvh[right_idx as usize].first_prim = i;
-        bvh[right_idx as usize].num_prims = right_num;
-
-        // If this happens, the current node shall be a leaf.
-        if left_num == 0 || right_num == 0 {
-            return;
-        }
-
-        bvh[bvh_node_index as usize].left_child = left_idx;
-        bvh[bvh_node_index as usize].right_child = right_idx;
-        Self::subdivide(bvh, triangles, left_idx);
-        Self::subdivide(bvh, triangles, right_idx);
     }
 
     fn try_hit_rec(
@@ -1133,6 +1204,12 @@ pub struct Mesh {
     aabb: AABoundingBox,
     triangles: Vec<Triangle>,
     material: Material,
+}
+
+impl Transformable for Mesh {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
 }
 
 fn load_obj(path: &Path) -> Vec<Triangle> {
