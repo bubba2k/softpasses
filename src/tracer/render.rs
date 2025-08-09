@@ -44,6 +44,42 @@ fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -
     }
 }
 
+// Return the albedo of the first object/material hit
+// TODO: Instead return albedo of the first non-transmission hit
+fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World) -> Color {
+    static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
+    // Abort if max bounce is reached.
+    // Fire the ray. See if it hits anything.
+    if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
+        match hit.material.scatter(ray, &hit) {
+            (_, Some(color)) => {
+                color
+            },
+            (_, None) => {
+                COLOR_BLACK
+            }
+        }
+    } else {
+        // The ray did not hit anything. Return the background albedo.
+        world.background.sample(ray.dir)
+    }
+}
+
+// Return the normal of the first object/material hit
+// TODO: Instead return normal of the first non-transmission hit
+fn trace_ray_normal(ray: &Ray, settings: &RenderSettings, world: &World) -> Color {
+    static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
+    // Abort if max bounce is reached.
+    // Fire the ray. See if it hits anything.
+    if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
+        hit.normal
+    } else {
+        // We pretend the background is a perfect sphere (that the camera is inside of)
+        // So we return the normal of that sphere
+        -ray.dir
+    }
+}
+
 fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
