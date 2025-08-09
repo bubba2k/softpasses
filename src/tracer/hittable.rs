@@ -861,6 +861,7 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
 
 impl<T: HittableTrait> BVH<T> {
     pub fn new(mut list: Vec<T>) -> BVH<T> {
+        eprintln!("Building scene bvh");
         let num_objs = list.len();
 
         // Assume one triangle per leaf
@@ -937,7 +938,7 @@ impl<T: HittableTrait> BVH<T> {
         // Sort to the left and right of split value
         let mut i = node.first_prim;
         let mut j = i + node.num_prims - 1;
-        while i <= j {
+        while i < j + 1 {
             // For now, we use the first corner of each triangle as the centroid
             // TODO: Use the actual centroid.
             if objects[i as usize].centroid()[axis] < split_value {
@@ -974,6 +975,81 @@ impl<T: HittableTrait> BVH<T> {
     }
 }
 
+fn subdivide(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<Triangle>, bvh_node_index: u32) {
+    // Always split along longest axis for now
+    let node = &mut bvh[bvh_node_index as usize];
+    if node.num_prims == 1 {
+        // For leaf nodes, we do not initalize the aabb or anything like that
+        return;
+    }
+    let begin = node.first_prim as usize;
+    let end = (node.first_prim + node.num_prims) as usize;
+    for tri in triangles[begin..end].iter() {
+        node.aabb.expand(&tri.positions[0]);
+        node.aabb.expand(&tri.positions[1]);
+        node.aabb.expand(&tri.positions[2]);
+    }
+    let extent = node.aabb.max - node.aabb.min;
+    // Split along the longest axis, determine split value
+    let mut axis = 0;
+    if extent.y > extent.x {
+        axis = 1
+    }
+    if extent.z > extent[axis] {
+        axis = 2
+    }
+    let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
+    // Sort to the left and right of split value
+    let mut i = node.first_prim;
+    let mut j = i + node.num_prims - 1;
+    while i < j + 1 {
+        // For now, we use the first corner of each triangle as the centroid
+        // TODO: Use the actual centroid.
+        if triangles[i as usize].centroid[axis] < split_value {
+            i += 1;
+        } else {
+            triangles.swap(i as usize, j as usize);
+            j -= 1;
+        }
+    }
+    // Initialize the two children nodes and go on to subidivide them
+    let left_idx = bvh_node_index * 2 + 1;
+    let right_idx = bvh_node_index * 2 + 2;
+    let left_num = i - bvh[bvh_node_index as usize].first_prim;
+    let right_num = bvh[bvh_node_index as usize].num_prims - left_num;
+    eprintln!("left child: {} | right child: {}", left_num, right_num);
+    bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
+    bvh[left_idx as usize].num_prims = left_num;
+    bvh[right_idx as usize].first_prim = i;
+    bvh[right_idx as usize].num_prims = right_num;
+    // If this happens, the current node shall be a leaf.
+    if left_num == 0 || right_num == 0 {
+        return;
+    }
+    bvh[bvh_node_index as usize].left_child = left_idx;
+    bvh[bvh_node_index as usize].right_child = right_idx;
+    subdivide(bvh, triangles, left_idx);
+    subdivide(bvh, triangles, right_idx);
+}
+
+fn build_bvh(mut primitives: Vec<Triangle>) -> (Vec<Triangle>, Vec<BVHNode>) {
+    // The recursive func to build the BVH search tree
+
+    eprintln!("Building BVH.");
+    let num_prims = primitives.len();
+
+    // Assume one triangle per leaf
+    let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 3 * num_prims - 1];
+    // Set the root node
+    bvh_nodes[0].first_prim = 0;
+    bvh_nodes[0].num_prims = num_prims as u32;
+
+    subdivide(&mut bvh_nodes, &mut primitives, 0);
+
+    eprintln!("Built BVH.");
+    (primitives, bvh_nodes)
+}
+
 #[derive(Clone)]
 pub struct BVHMesh {
     triangles: Vec<Triangle>,
@@ -984,14 +1060,17 @@ pub struct BVHMesh {
 impl Transformable for BVHMesh {
     fn apply_transform(self, transform: &Transform) -> Self {
         // 1. Apply transform to vertex positions and normals
-        let transformed_triangles = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
+        let transformed_triangles: Vec<Triangle> = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
 
+        eprintln!("Transformed {} triangles", transformed_triangles.len());
         // 2. Rebuild BVH (technically only need to this when transform
         //    includes rotation. 
         // TODO
+        let (new_triangles, new_bvh_nodes) = build_bvh(transformed_triangles);
 
         BVHMesh {
-            triangles: transformed_triangles,
+            triangles: new_triangles,
+            nodes: new_bvh_nodes,
             ..self
         }
     }
@@ -1004,90 +1083,14 @@ impl BVHMesh {
         Hittable::BVHMesh(bvh_mesh)
     }
 
-    fn new(mut triangles: Vec<Triangle>, material: Material) -> Self {
-        let num_tris = triangles.len();
-
-        // Assume one triangle per leaf
-        let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * num_tris - 1];
-
-        // Set the root node
-        bvh_nodes[0].first_prim = 0;
-        bvh_nodes[0].num_prims = num_tris as u32;
-
-        Self::subdivide(&mut bvh_nodes, &mut triangles, 0);
+    fn new(triangles: Vec<Triangle>, material: Material) -> Self {
+        let (triangles, bvh_nodes) = build_bvh(triangles);
 
         Self {
             triangles: triangles,
             nodes: bvh_nodes,
             material: material,
         }
-    }
-
-    fn subdivide(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<Triangle>, bvh_node_index: u32) {
-        // Always split along longest axis for now
-        let node = &mut bvh[bvh_node_index as usize];
-        if node.num_prims == 1 {
-            // For leaf nodes, we do not initalize the aabb or anything like that
-            return;
-        }
-
-        let begin = node.first_prim as usize;
-        let end = (node.first_prim + node.num_prims) as usize;
-        for tri in triangles[begin..end].iter() {
-            node.aabb.expand(&tri.positions[0]);
-            node.aabb.expand(&tri.positions[1]);
-            node.aabb.expand(&tri.positions[2]);
-        }
-
-        let extent = node.aabb.max - node.aabb.min;
-
-        // Split along the longest axis, determine split value
-        let mut axis = 0;
-        if extent.y > extent.x {
-            axis = 1
-        }
-        if extent.z > extent[axis] {
-            axis = 2
-        }
-        let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
-
-        // Sort to the left and right of split value
-        let mut i = node.first_prim;
-        let mut j = i + node.num_prims - 1;
-        while i <= j {
-            // For now, we use the first corner of each triangle as the centroid
-            // TODO: Use the actual centroid.
-            if triangles[i as usize].centroid[axis] < split_value {
-                i += 1;
-            } else {
-                triangles.swap(i as usize, j as usize);
-                j -= 1;
-            }
-        }
-
-        // Initialize the two children nodes and go on to subidivide them
-        let left_idx = bvh_node_index * 2 + 1;
-        let right_idx = bvh_node_index * 2 + 2;
-
-        let left_num = i - bvh[bvh_node_index as usize].first_prim;
-        let right_num = bvh[bvh_node_index as usize].num_prims - left_num;
-
-        eprintln!("left child: {} | right child: {}", left_num, right_num);
-
-        bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
-        bvh[left_idx as usize].num_prims = left_num;
-        bvh[right_idx as usize].first_prim = i;
-        bvh[right_idx as usize].num_prims = right_num;
-
-        // If this happens, the current node shall be a leaf.
-        if left_num == 0 || right_num == 0 {
-            return;
-        }
-
-        bvh[bvh_node_index as usize].left_child = left_idx;
-        bvh[bvh_node_index as usize].right_child = right_idx;
-        Self::subdivide(bvh, triangles, left_idx);
-        Self::subdivide(bvh, triangles, right_idx);
     }
 
     fn try_hit_rec(
