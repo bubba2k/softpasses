@@ -2,6 +2,7 @@ use super::material::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
+use crate::math::transform::{Transform, Transformable};
 use std::path::Path;
 
 pub struct HitRecord<'a> {
@@ -92,6 +93,20 @@ pub enum Hittable {
     Plane(Plane),
     Mesh(Mesh),
     BVHMesh(BVHMesh),
+}
+
+impl Transformable for Hittable {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        match self {
+            Hittable::Sphere(sphere) => Hittable::Sphere(sphere.apply_transform(transform)),
+            Hittable::Parallelepiped(parallelepiped) => Hittable::Parallelepiped(parallelepiped.apply_transform(transform)),
+            Hittable::Parallelogram(parallelogram) => Hittable::Parallelogram(parallelogram.apply_transform(transform)),
+            Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
+            Hittable::Mesh(mesh) => Hittable::Mesh(mesh.apply_transform(transform)),
+            Hittable::BVHMesh(bvh_mesh) => Hittable::BVHMesh(bvh_mesh.apply_transform(transform)),
+        }
+    }
+
 }
 
 impl HittableTrait for Hittable {
@@ -273,6 +288,12 @@ impl Sphere {
     }
 }
 
+impl Transformable for Sphere {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
+}
+
 impl HittableTrait for Sphere {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
@@ -352,6 +373,12 @@ impl Plane {
     }
 }
 
+impl Transformable for Plane {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
+}
+
 impl HittableTrait for Plane {
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
         // Abort if parallel
@@ -406,6 +433,12 @@ pub struct Parallelogram {
     projection_plane: vector::CoordinatePlane,
 
     material: Material,
+}
+
+impl Transformable for Parallelogram {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
 }
 
 impl Parallelogram {
@@ -609,6 +642,12 @@ pub struct Parallelepiped {
     material: Material,
 }
 
+impl Transformable for Parallelepiped {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
+}
+
 impl HittableTrait for Parallelepiped {
     fn num_primitives(&self) -> u32 {
         6
@@ -740,6 +779,19 @@ struct Triangle {
     positions: [Vec3f; 3],
     normals: [Vec3f; 3],
     centroid: Vec3f,
+}
+
+impl Transformable for Triangle {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        let affine = transform.get_affine();
+        let normal_mat = affine.matrix3.inverse().transpose();
+
+        Triangle {
+            positions: self.positions.into_iter().map(|p| affine.transform_point3a(p) ).collect::<Vec<Vec3f>>().try_into().unwrap(),
+            normals: self.positions.into_iter().map(|p| (normal_mat * p).normalize() ).collect::<Vec<Vec3f>>().try_into().unwrap(),
+            centroid: affine.transform_point3a(self.centroid),
+        }
+    }
 }
 
 impl Triangle {
@@ -927,6 +979,22 @@ pub struct BVHMesh {
     triangles: Vec<Triangle>,
     nodes: Vec<BVHNode>,
     material: Material,
+}
+
+impl Transformable for BVHMesh {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        // 1. Apply transform to vertex positions and normals
+        let transformed_triangles = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
+
+        // 2. Rebuild BVH (technically only need to this when transform
+        //    includes rotation. 
+        // TODO
+
+        BVHMesh {
+            triangles: transformed_triangles,
+            ..self
+        }
+    }
 }
 
 impl BVHMesh {
@@ -1133,6 +1201,12 @@ pub struct Mesh {
     aabb: AABoundingBox,
     triangles: Vec<Triangle>,
     material: Material,
+}
+
+impl Transformable for Mesh {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        todo!()
+    }
 }
 
 fn load_obj(path: &Path) -> Vec<Triangle> {

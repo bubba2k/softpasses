@@ -23,6 +23,12 @@ impl Transform {
         }
     }
 
+    pub fn translate(self, offset: Vec3) -> Self {
+        Transform {
+            affine: Affine3A::from_translation(offset) * self.affine,
+        }
+    }
+
     pub fn scale_uniform(self, scale: f32) -> Self {
         Transform {
             affine: Affine3A::from_scale(vec3(scale, scale, scale)) * self.affine,
