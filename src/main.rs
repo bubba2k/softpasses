@@ -9,7 +9,7 @@ use std::default;
 use std::path::Path;
 
 use math::util::Interval;
-use math::vector::{Float, Vec3f, vec3};
+use math::vector::{Float, Vec3f, vec3, Pixel};
 use math::transform::{Transform, Transformable};
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
