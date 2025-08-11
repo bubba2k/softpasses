@@ -781,6 +781,7 @@ struct Triangle {
     centroid: Vec3f,
 }
 
+
 impl Transformable for Triangle {
     fn apply_transform(self, transform: &Transform) -> Self {
         let affine = transform.get_affine();
@@ -1206,12 +1207,6 @@ pub struct Mesh {
     material: Material,
 }
 
-impl Transformable for Mesh {
-    fn apply_transform(self, transform: &Transform) -> Self {
-        todo!()
-    }
-}
-
 fn load_obj(path: &Path) -> Vec<Triangle> {
     const LOAD_OPTIONS: tobj::LoadOptions = tobj::LoadOptions {
         single_index: true,
@@ -1290,6 +1285,27 @@ impl Mesh {
             material,
             triangles,
         })
+    }
+}
+
+impl Transformable for Mesh {
+    fn apply_transform(self, transform: &Transform) -> Self {
+        // 1. Apply transform to vertex positions and normals
+        let transformed_triangles: Vec<Triangle> = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
+        let mut new_aabb = AABoundingBox::default();
+        
+        for tri in transformed_triangles.iter() {
+            new_aabb.expand(&tri.positions[0]);
+            new_aabb.expand(&tri.positions[1]);
+            new_aabb.expand(&tri.positions[2]);
+
+        }
+
+        Mesh {
+            triangles: transformed_triangles,
+            aabb: new_aabb,
+            ..self
+        }
     }
 }
 
