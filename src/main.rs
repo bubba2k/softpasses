@@ -60,11 +60,11 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_rough)
+    let teapot = BVHMesh::from_obj_file(Path::new("assets/bunny.obj"), mat_rough)
             .apply_transform(&Transform::new()
-                .scale(glam::vec3(1.0, 1.5, 1.0))
-                .translate(glam::vec3(0.0, 1.0, 0.))
-                .rotate_z(0.1)
+                .scale_uniform(30.0)
+                .translate(glam::vec3(0.0, -0.5, 0.))
+                .rotate_z(0.0)
             );
 
     let objects = vec![teapot, floor];
