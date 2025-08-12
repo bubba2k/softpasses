@@ -26,8 +26,8 @@ use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
 fn main() {
-    let width: u32 = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32 = 1280 / 2;
+    let height: u32 = 1024 / 2;
     let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 4.3, 18.0), Vec3f::new(0.0, 2.0, 0.0));
@@ -47,6 +47,8 @@ fn main() {
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
     let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
     let mat_rough = MatLambertDiffuse::new(vec3(1.0, 0.1, 0.1));
+    let mat_normal_dbg = MatNormalDebug::new();
+    let mat_face_dbg = MatFaceDebug::new();
 
     let floor = Parallelepiped::new(
         vec3(-2.5, -1.0, -2.0),
@@ -60,10 +62,10 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = BVHMesh::from_obj_file(Path::new("assets/bunny.obj"), mat_rough)
+    let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_face_dbg.clone())
             .apply_transform(&Transform::new()
-                .scale_uniform(30.0)
-                .translate(glam::vec3(0.0, -0.5, 0.))
+                .scale_uniform(1.0)
+                .translate(glam::vec3(0.0, -0.0, 0.))
                 .rotate_z(0.0)
             );
 
@@ -81,7 +83,10 @@ fn main() {
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
 
-    let denoised_image = render::denoise(&render_result.colors, width as usize, height as usize);
+    let denoised_image = 
+        render::denoise_with_albedo_normal(&render_result.combined_pass,
+            Some(&render_result.albedo_pass), Some(&render_result.normal_pass), width as usize, height as usize);
+    let normal_image: Vec<Vec3f> = render_result.normal_pass.iter().map(|c| (c + 1.0) * 0.5 ).collect();
 
     let pixels: Vec<Pixel> = denoised_image.iter().map(render::color_to_pixel).collect();
     let ppm_string = io::ppm::ppm_image(width, height, &pixels[..], comment_string);

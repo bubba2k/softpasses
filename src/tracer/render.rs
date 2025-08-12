@@ -46,7 +46,7 @@ fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -
 
 // Return the albedo of the first object/material hit
 // TODO: Instead return albedo of the first non-transmission hit
-fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World) -> Color {
+fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Abort if max bounce is reached.
     // Fire the ray. See if it hits anything.
@@ -67,7 +67,7 @@ fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World) -> Colo
 
 // Return the normal of the first object/material hit
 // TODO: Instead return normal of the first non-transmission hit
-fn trace_ray_normal(ray: &Ray, settings: &RenderSettings, world: &World) -> Color {
+fn trace_ray_normal(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Abort if max bounce is reached.
     // Fire the ray. See if it hits anything.
@@ -132,6 +132,7 @@ pub fn render_region(
     settings: &RenderSettings,
     world: &World,
     region: util::ImageRegion,
+    trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color,
 ) -> Vec<Color> {
     let mut colors: Vec<Color> = Vec::new();
     let offset_range = 1.0 / settings.image_height as Float;
@@ -157,7 +158,7 @@ pub fn render_region(
                 let ray = cam
                     .viewport
                     .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
-                color += trace_ray(&ray, &settings, &world, 0)
+                color += trace_func(&ray, &settings, &world, 0)
                     * (1.0 / settings.samples_per_pixel as Float);
             }
             colors.push(color);
@@ -180,7 +181,7 @@ fn estimate_render_time(
     };
     let estimate_start = std::time::Instant::now();
     let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
-    render_region(camera, &estimate_settings, world, region);
+    render_region(camera, &estimate_settings, world, region, trace_ray);
     // It seems a bit impossible to estimate how much the number of threads actually influences
     // the render time. Assume half for more than 1. Thats it uhhh
     let estimate_duration = estimate_start.elapsed().as_secs_f64() as Float
@@ -217,7 +218,9 @@ pub struct RenderSettings {
 }
 
 pub struct RenderResult {
-    pub colors: Vec<Color>,
+    pub combined_pass: Vec<Color>,
+    pub albedo_pass: Vec<Color>,
+    pub normal_pass: Vec<Color>,
     pub time_elapsed: Float,
 
     pub image_height: u32,
@@ -248,100 +251,6 @@ pub trait Scheduler {
     fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult;
 }
 
-#[derive(Default)]
-pub struct NaiveSingleThreadScheduler {}
-
-impl NaiveSingleThreadScheduler {
-    pub fn new() -> Self {
-        NaiveSingleThreadScheduler {}
-    }
-}
-
-impl Scheduler for NaiveSingleThreadScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
-        estimate_render_time(&camera, world, &settings, 1);
-
-        let start = Instant::now();
-
-        let region = ImageRegion::whole_image(settings.image_width, settings.image_height);
-        let image = render_region(&camera, &settings, &world, region);
-
-        RenderResult {
-            colors: image,
-            time_elapsed: start.elapsed().as_secs_f64() as Float,
-            image_height: settings.image_height,
-            image_width: settings.image_width,
-            num_samples: settings.samples_per_pixel,
-            max_bounces: settings.max_bounces,
-            num_objects: world.objects_bvh.num_primitives(),
-        }
-    }
-}
-
-pub struct NaiveMultiThreadScheduler {
-    num_threads: u32,
-}
-
-impl NaiveMultiThreadScheduler {
-    pub fn new(num_threads: u32) -> Self {
-        NaiveMultiThreadScheduler {
-            num_threads: num_threads,
-        }
-    }
-}
-
-impl Scheduler for NaiveMultiThreadScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
-        // Should probably have a more user friendly way to set the number of threads at some point.
-        let num_threads = self.num_threads;
-        let region: ImageRegion =
-            ImageRegion::whole_image(settings.image_width, settings.image_height);
-        // Print estimated render time
-        estimate_render_time(&camera, world, &settings, num_threads);
-        let start = std::time::Instant::now();
-        // Let several threads render the entire image with the same settings. For now,
-        // we simply copy all relevant data right over. Might change that later on.
-        // The SPP are split evenly between the threads. The resulting images from all threads are then averaged.
-        let spp_per_thread = settings.samples_per_pixel / num_threads;
-        let images: Vec<Vec<Color>> = (0..num_threads)
-            .into_par_iter()
-            .map(|_| { 
-                let thread_settings = RenderSettings { 
-                    samples_per_pixel: spp_per_thread,
-                    ..settings    
-                };
-                render_region(&camera, &thread_settings, &world, region.clone())
-            })
-            .collect();
-
-        // Perform weighted sum of all generated images.
-        let weight = 1.0 / num_threads as Float;
-        let len = images[0].len();
-        // Sum all the images up...
-        let mut result = vec![Color::new(0.0, 0.0, 0.0); len];
-        for image in images {
-            for i in 0..result.len() {
-                result[i] = result[i] + image[i];
-            }
-        }
-        // ... and normalize the result
-        for i in 0..len {
-            result[i] = result[i] * weight
-        }
-        let duration = start.elapsed();
-        eprintln!("Done in {:?} with {} threads.", duration, num_threads);
-        RenderResult {
-            colors: result,
-            time_elapsed: duration.as_secs_f64() as Float,
-            image_height: settings.image_height,
-            image_width: settings.image_width,
-            num_samples: settings.samples_per_pixel,
-            max_bounces: settings.max_bounces,
-            num_objects: world.objects_bvh.num_primitives(),
-        }
-    }
-}
-
 pub struct TiledScheduler {
     tile_size: u32,
 }
@@ -352,13 +261,8 @@ impl TiledScheduler {
             tile_size: tile_size,
         }
     }
-}
 
-impl Scheduler for TiledScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
-        // Rougly estimate render time here
-        estimate_render_time(&camera, world, &settings, 2);
-
+    fn render_pass(&self, camera: &Camera, settings: RenderSettings, world: &World, trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color) -> Vec<Color> {
         // Clamp tile size to minimum of 1 and maximum of image width.
         // -> This way, at least 1 tile fits entirely into the image.
         let tile_size_clamped = self
@@ -386,7 +290,7 @@ impl Scheduler for TiledScheduler {
         let rendered_tiles: Vec<Vec<Color>> = tiles
             // Rayon does all the thread magic for us here
             .par_iter()
-            .map(|tile| render_region(&camera, &settings, &world, tile.clone()))
+            .map(|tile| render_region(&camera, &settings, &world, tile.clone(), trace_func))
             .collect();
 
         // Flatten the rendered tiles to the final image. This is a bit finicky.
@@ -405,7 +309,7 @@ impl Scheduler for TiledScheduler {
             flattened_colors
         };
 
-        let colors = rendered_tiles
+        rendered_tiles
             .chunks(num_tiles_hor as usize)
             .map(|tile_row| {
                 // The first tile in every row is guaranted to have full width, so we can use
@@ -415,10 +319,28 @@ impl Scheduler for TiledScheduler {
             })
             // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
             .flatten()
-            .collect();
+            .collect()
+    }
+}
+
+impl Scheduler for TiledScheduler {
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
+        // Rougly estimate render time here
+        estimate_render_time(&camera, world, &settings, 2);
+
+        let begin = std::time::Instant::now();
+
+        eprintln!("Combined pass...");
+        let combined_pass = self.render_pass(&camera, settings.clone(), world, trace_ray);
+        eprintln!("Albedo pass...");
+        let albedo_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_albedo);
+        eprintln!("Normal pass...");
+        let normal_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_normal);
 
         RenderResult {
-            colors: colors,
+            combined_pass: combined_pass,
+            albedo_pass: albedo_pass,
+            normal_pass: normal_pass,
             time_elapsed: begin.elapsed().as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,
@@ -435,7 +357,7 @@ fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Ve
     let noisy_image: Vec<Float> = image.iter().map(|c| {
         [c[0], c[1], c[2]]
     }).flatten().collect();
-    let mut denoised_image = vec![f32::default(); (image_width * image_height * 3) as usize];
+    let mut denoised_image = vec![f32::default(); (image_width * image_height * 3)];
     let denoise_device = oidn::Device::new();
 
     match (albedo, normals) {
@@ -451,10 +373,20 @@ fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Ve
                 [c[0], c[1], c[2]]
             }).flatten().collect();
 
+            // Prefilter the albedo pass
+            let mut albedo_denoised: Vec<f32> = vec![f32::default(); (image_width * image_height * 3) as usize];
+
+            // Prefilter the albedo and normal passes
             oidn::RayTracing::new(&denoise_device)
             .srgb(false)
             .image_dimensions(image_width as usize, image_height as usize)
-            .albedo(&albedo_flattened)
+            .filter(&albedo_flattened, &mut albedo_denoised)
+            .expect("Denoise filter config error.");
+
+            oidn::RayTracing::new(&denoise_device)
+            .srgb(false)
+            .image_dimensions(image_width as usize, image_height as usize)
+            .albedo(&albedo_denoised)
             .filter(&noisy_image, &mut denoised_image)
             .expect("Denoise filter config error.");
         },
@@ -466,10 +398,26 @@ fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Ve
                 [c[0], c[1], c[2]]
             }).flatten().collect();
 
+            let mut albedo_denoised: Vec<f32> = vec![f32::default(); (image_width * image_height * 3) as usize];
+            let mut normal_denoised: Vec<f32> = vec![f32::default(); (image_width * image_height * 3) as usize];
+
+            // Prefilter the albedo and normal passes
             oidn::RayTracing::new(&denoise_device)
             .srgb(false)
             .image_dimensions(image_width as usize, image_height as usize)
-            .albedo_normal(&albedo_flattened, &normals_flattened)
+            .filter(&albedo_flattened, &mut albedo_denoised)
+            .expect("Denoise filter config error.");
+
+            oidn::RayTracing::new(&denoise_device)
+            .srgb(false)
+            .image_dimensions(image_width as usize, image_height as usize)
+            .filter(&normals_flattened, &mut normal_denoised)
+            .expect("Denoise filter config error.");
+
+            oidn::RayTracing::new(&denoise_device)
+            .srgb(false)
+            .image_dimensions(image_width as usize, image_height as usize)
+            .albedo_normal(&albedo_denoised, &normal_denoised)
             .filter(&noisy_image, &mut denoised_image)
             .expect("Denoise filter config error.");
         }
@@ -487,4 +435,8 @@ fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Ve
 
 pub fn denoise(image: &Vec<Color>, image_width: usize, image_height: usize) -> Vec<Color> {
     _denoise(image, None, None, image_width, image_height)
+}
+
+pub fn denoise_with_albedo_normal(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Vec<Color>>, image_width: usize, image_height: usize) -> Vec<Color>{
+    _denoise(image, albedo, normals, image_width, image_height)
 }
