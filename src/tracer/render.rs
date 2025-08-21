@@ -60,7 +60,7 @@ fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World, _bounce
             }
         }
     } else {
-        // The ray did not hit anything. Return the background albedo.
+        // The ray did not hit anything. Return black
         world.background.sample(ray.dir)
     }
 }
@@ -72,7 +72,11 @@ fn trace_ray_normal(ray: &Ray, settings: &RenderSettings, world: &World, _bounce
     // Abort if max bounce is reached.
     // Fire the ray. See if it hits anything.
     if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
-        hit.normal
+        if hit.front_face {
+            hit.normal
+        } else {
+            -hit.normal
+        }
     } else {
         // We pretend the background is a perfect sphere (that the camera is inside of)
         // So we return the normal of that sphere

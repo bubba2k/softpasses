@@ -26,8 +26,8 @@ use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
 fn main() {
-    let width: u32 = 1280 / 2;
-    let height: u32 = 1024 / 2;
+    let width: u32 = 1280 / 4;
+    let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 4.3, 18.0), Vec3f::new(0.0, 2.0, 0.0));
@@ -39,6 +39,7 @@ fn main() {
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
     };
+    let do_denoise = true;
     let camera = Camera::new(pose, lens);
 
     // Scene setup
@@ -62,9 +63,9 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = BVHMesh::from_obj_file(Path::new("assets/teapot.obj"), mat_face_dbg.clone())
+    let teapot = BVHMesh::from_obj_file(Path::new("assets/bunny.obj"), mat_rough.clone())
             .apply_transform(&Transform::new()
-                .scale_uniform(1.0)
+                .scale_uniform(30.0)
                 .translate(glam::vec3(0.0, -0.0, 0.))
                 .rotate_z(0.0)
             );
@@ -84,9 +85,12 @@ fn main() {
     eprintln!("{}", comment_string);
 
     let denoised_image = 
+    if do_denoise {
         render::denoise_with_albedo_normal(&render_result.combined_pass,
-            Some(&render_result.albedo_pass), Some(&render_result.normal_pass), width as usize, height as usize);
-    let normal_image: Vec<Vec3f> = render_result.normal_pass.iter().map(|c| (c + 1.0) * 0.5 ).collect();
+            Some(&render_result.albedo_pass), Some(&render_result.normal_pass), width as usize, height as usize)
+    } else {
+        render_result.combined_pass
+    };
 
     let pixels: Vec<Pixel> = denoised_image.iter().map(render::color_to_pixel).collect();
     let ppm_string = io::ppm::ppm_image(width, height, &pixels[..], comment_string);

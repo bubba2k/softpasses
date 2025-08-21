@@ -1233,6 +1233,7 @@ fn load_obj(path: &Path) -> Vec<Triangle> {
     }
     // Do the same for normals
     if !mesh.normals.is_empty() {
+        eprintln!("No normals given in obj file {:?}. Generating...", path);
         for index in mesh.indices.iter() {
             let vert_idx = (*index as usize) * 3;
             let normal = Vec3f::new(
