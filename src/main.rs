@@ -13,7 +13,8 @@ use math::vector::{Float, Vec3f, vec3, Pixel};
 use math::transform::{Transform, Transformable};
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
-use tracer::hittable::{BVHMesh, Hittable, Mesh, Parallelepiped, Plane, Sphere};
+use tracer::hittable::{Hittable, Mesh, Parallelepiped, Plane, Sphere};
+use tracer::bvh::BVHMesh;
 #[allow(unused_imports)]
 use tracer::material::{
     MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
@@ -73,7 +74,7 @@ fn main() {
     let objects = vec![teapot, floor];
 
     let env_texture =
-        Texture::from_path(Path::new("assets/Indoor2_HDRI_4K-TONEMAPPED.jpg")).unwrap();
+        Texture::from_path(Path::new("assets/Indoor1_HDRI_2K-TONEMAPPED.jpg")).unwrap();
 
     let background = Background::from_environment_texture(env_texture, -3.1);
 

@@ -4,3 +4,4 @@ pub mod material;
 pub mod render;
 pub mod texture;
 pub mod world;
+pub mod bvh;

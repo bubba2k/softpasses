@@ -1,5 +1,6 @@
 use crate::math::vector::{Color, Float, Vec3f};
-use crate::tracer::hittable::{BVH, Hittable};
+use crate::tracer::bvh::BVH;
+use crate::tracer::hittable::{Hittable};
 use crate::tracer::texture::Texture;
 
 #[derive(Clone)]
