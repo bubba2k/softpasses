@@ -16,7 +16,7 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
-fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<T>, bvh_node_index: u32) {
+fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
     // Always split along longest axis for now
     let node = &mut bvh[bvh_node_index as usize];
     if node.num_prims == 1 {
@@ -25,7 +25,7 @@ fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<T>, b
     }
     let begin = node.first_prim as usize;
     let end = (node.first_prim + node.num_prims) as usize;
-    for tri in triangles[begin..end].iter() {
+    for tri in primitives[begin..end].iter() {
         node.aabb.expand_aabb(&tri.get_aabb());
     }
     let extent = node.aabb.max - node.aabb.min;
@@ -44,10 +44,10 @@ fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<T>, b
     while i < j + 1 {
         // For now, we use the first corner of each triangle as the centroid
         // TODO: Use the actual centroid.
-        if triangles[i as usize].centroid()[axis] < split_value {
+        if primitives[i as usize].centroid()[axis] < split_value {
             i += 1;
         } else {
-            triangles.swap(i as usize, j as usize);
+            primitives.swap(i as usize, j as usize);
             j -= 1;
         }
     }
@@ -67,8 +67,8 @@ fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<T>, b
     }
     bvh[bvh_node_index as usize].left_child = left_idx;
     bvh[bvh_node_index as usize].right_child = right_idx;
-    subdivide(bvh, triangles, left_idx);
-    subdivide(bvh, triangles, right_idx);
+    subdivide(bvh, primitives, left_idx);
+    subdivide(bvh, primitives, right_idx);
 }
 
 fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
