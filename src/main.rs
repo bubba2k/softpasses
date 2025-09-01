@@ -64,7 +64,7 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = BVHMesh::from_obj_file(Path::new("assets/bunny.obj"), mat_rough.clone())
+    let teapot = BVHMesh::from_obj_file(Path::new("assets/cookie/3DCookie002_HQ-1K-JPG.obj"), mat_rough.clone())
             .apply_transform(&Transform::new()
                 .scale_uniform(30.0)
                 .translate(glam::vec3(0.0, -0.0, 0.))
