@@ -71,7 +71,7 @@ fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, triangles: &mut Vec<T>, b
     subdivide(bvh, triangles, right_idx);
 }
 
-pub fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
+fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
     // The recursive func to build the BVH search tree
 
     eprintln!("Building BVH.");
