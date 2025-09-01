@@ -16,6 +16,33 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
+fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: Vec<T>, split_pos: Float, axis: usize) -> Float {
+    let (mut aabb_left, mut aabb_right) = (AABoundingBox::default(), AABoundingBox::default());
+    let (mut left_count, mut right_count) = (0, 0);
+
+    for i in 0..node.num_prims {
+        let primitive = &primitives[(node.first_prim + i) as usize];
+
+        if primitive.centroid()[axis] < split_pos {
+            aabb_left.expand_aabb(&primitive.get_aabb());
+            left_count += 1;
+        } else {
+            aabb_right.expand_aabb(&primitive.get_aabb());
+            right_count += 1;
+        }
+    }
+
+    let aabb_area = |aabb: &AABoundingBox| { 
+        let extent = aabb.max - aabb.min;
+        // Strictly speaking, this is only half the actual surface of the box, but we only compare
+        // between them, dont care about absolute values, so it is fine.
+        let area = extent[0] * extent[1] + extent[0] * extent[2] + extent[1] * extent[2];
+        area
+    };
+
+    (left_count as f32) * aabb_area(&aabb_left) + (right_count as f32) * aabb_area(&aabb_right)
+}
+
 fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
     // Always split along longest axis for now
     let node = &mut bvh[bvh_node_index as usize];
