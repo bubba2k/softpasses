@@ -67,17 +67,6 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
     }).expect("Attempted to find best split on empty node");
 
     *lowest_cost_split
-
-    /*
-    let lowest_cost_split = primitives[indices].iter().map(HittableTrait::centroid).cartesian_product(0..3)
-    .min_by(|a, b| {
-        let sah_a = eval_SAH(node, primitives, a.0[a.1], a.1);
-        let sah_b = eval_SAH(node, primitives, b.0[b.1], b.1);
-
-        Float::total_cmp(&sah_a, &sah_b)
-    }).expect("Attempted to find best split on empty list.");
-    (lowest_cost_split.1 as u32, lowest_cost_split.0[lowest_cost_split.1])
-    */
 }
 
 fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
