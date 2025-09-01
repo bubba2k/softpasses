@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use super::hittable::{HittableTrait, AABoundingBox, Triangle, Hittable, HitRecord};
 use std::path::Path;
 use crate::{Vec3f, Float};
@@ -16,7 +18,7 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
-fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: Vec<T>, split_pos: Float, axis: usize) -> Float {
+fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Float, axis: usize) -> Float {
     let (mut aabb_left, mut aabb_right) = (AABoundingBox::default(), AABoundingBox::default());
     let (mut left_count, mut right_count) = (0, 0);
 
@@ -43,9 +45,23 @@ fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: Vec<T>, split_pos: Flo
     (left_count as f32) * aabb_area(&aabb_left) + (right_count as f32) * aabb_area(&aabb_right)
 }
 
-fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
+// Compute lowest cost axis and position along it to split
+fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
+    let indices = (node.first_prim as usize)..((node.first_prim + node.num_prims) as usize);
+    let lowest_cost_split = primitives[indices].iter().map(HittableTrait::centroid).cartesian_product(0..3)
+    .min_by(|a, b| {
+        let sah_a = eval_SAH(node, primitives, a.0[a.1], a.1);
+        let sah_b = eval_SAH(node, primitives, b.0[b.1], b.1);
+
+        Float::total_cmp(&sah_a, &sah_b)
+    }).expect("Attempted to find best split on empty list.");
+
+    (lowest_cost_split.1 as u32, lowest_cost_split.0[lowest_cost_split.1])
+}
+
+fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
     // Always split along longest axis for now
-    let node = &mut bvh[bvh_node_index as usize];
+    let node = &mut bvh_nodes[bvh_node_index as usize];
     if node.num_prims == 1 {
         // For leaf nodes, we do not initalize the aabb or anything like that
         return;
@@ -55,23 +71,16 @@ fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, primitives: &mut Vec<T>, 
     for tri in primitives[begin..end].iter() {
         node.aabb.expand_aabb(&tri.get_aabb());
     }
-    let extent = node.aabb.max - node.aabb.min;
-    // Split along the longest axis, determine split value
-    let mut axis = 0;
-    if extent.y > extent.x {
-        axis = 1
-    }
-    if extent.z > extent[axis] {
-        axis = 2
-    }
-    let split_value = node.aabb.min[axis] + 0.5 * extent[axis];
+
+    let (axis, split_value) = best_split(node, primitives);
+
     // Sort to the left and right of split value
     let mut i = node.first_prim;
     let mut j = i + node.num_prims - 1;
     while i < j + 1 {
         // For now, we use the first corner of each triangle as the centroid
         // TODO: Use the actual centroid.
-        if primitives[i as usize].centroid()[axis] < split_value {
+        if primitives[i as usize].centroid()[axis as usize] < split_value {
             i += 1;
         } else {
             primitives.swap(i as usize, j as usize);
@@ -81,21 +90,21 @@ fn subdivide<T: HittableTrait>(bvh: &mut Vec<BVHNode>, primitives: &mut Vec<T>, 
     // Initialize the two children nodes and go on to subidivide them
     let left_idx = bvh_node_index * 2 + 1;
     let right_idx = bvh_node_index * 2 + 2;
-    let left_num = i - bvh[bvh_node_index as usize].first_prim;
-    let right_num = bvh[bvh_node_index as usize].num_prims - left_num;
+    let left_num = i - bvh_nodes[bvh_node_index as usize].first_prim;
+    let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
     eprintln!("left child: {} | right child: {}", left_num, right_num);
-    bvh[left_idx as usize].first_prim = bvh[bvh_node_index as usize].first_prim;
-    bvh[left_idx as usize].num_prims = left_num;
-    bvh[right_idx as usize].first_prim = i;
-    bvh[right_idx as usize].num_prims = right_num;
+    bvh_nodes[left_idx as usize].first_prim = bvh_nodes[bvh_node_index as usize].first_prim;
+    bvh_nodes[left_idx as usize].num_prims = left_num;
+    bvh_nodes[right_idx as usize].first_prim = i;
+    bvh_nodes[right_idx as usize].num_prims = right_num;
     // If this happens, the current node shall be a leaf.
     if left_num == 0 || right_num == 0 {
         return;
     }
-    bvh[bvh_node_index as usize].left_child = left_idx;
-    bvh[bvh_node_index as usize].right_child = right_idx;
-    subdivide(bvh, primitives, left_idx);
-    subdivide(bvh, primitives, right_idx);
+    bvh_nodes[bvh_node_index as usize].left_child = left_idx;
+    bvh_nodes[bvh_node_index as usize].right_child = right_idx;
+    subdivide(bvh_nodes, primitives, left_idx);
+    subdivide(bvh_nodes, primitives, right_idx);
 }
 
 fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
@@ -105,7 +114,7 @@ fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>
     let num_prims = primitives.len();
 
     // Assume one triangle per leaf
-    let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 3 * num_prims - 1];
+    let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 1000 * num_prims - 1];
     // Set the root node
     bvh_nodes[0].first_prim = 0;
     bvh_nodes[0].num_prims = num_prims as u32;
