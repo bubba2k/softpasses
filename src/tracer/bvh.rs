@@ -1,6 +1,7 @@
 use itertools::Itertools;
 
 use super::hittable::{HittableTrait, AABoundingBox, Triangle, Hittable, HitRecord};
+use core::num;
 use std::path::Path;
 use crate::{Vec3f, Float};
 use crate::{Transformable, Transform};
@@ -47,7 +48,27 @@ fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Fl
 
 // Compute lowest cost axis and position along it to split
 fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
-    let indices = (node.first_prim as usize)..((node.first_prim + node.num_prims) as usize);
+    // Check a certain selection of candidate split positions here
+    let num_positions = 100;
+    let node_extent = node.aabb.max - node.aabb.min;
+    let split_candidates: Vec<(u32, Float)> = (0..3).map(|axis: u32| {
+        let axis_extent = node_extent[axis as usize];
+        let axis_min = node.aabb.min[axis as usize];
+        (0..=(num_positions - 1)).map(|i| {
+            (axis, axis_min + (axis_extent as f32) * (i as f32) / (num_positions as f32))
+        }).collect::<Vec<(u32, Float)>>()
+    }).flatten().collect();
+
+    let lowest_cost_split = split_candidates.iter().min_by(|a, b| {
+        let sah_a = eval_SAH(node, primitives, a.1, a.0 as usize);
+        let sah_b = eval_SAH(node, primitives, b.1, b.0 as usize);
+
+        sah_a.total_cmp(&sah_b)
+    }).expect("Attempted to find best split on empty node");
+
+    *lowest_cost_split
+
+    /*
     let lowest_cost_split = primitives[indices].iter().map(HittableTrait::centroid).cartesian_product(0..3)
     .min_by(|a, b| {
         let sah_a = eval_SAH(node, primitives, a.0[a.1], a.1);
@@ -55,8 +76,8 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
 
         Float::total_cmp(&sah_a, &sah_b)
     }).expect("Attempted to find best split on empty list.");
-
     (lowest_cost_split.1 as u32, lowest_cost_split.0[lowest_cost_split.1])
+    */
 }
 
 fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
