@@ -165,12 +165,114 @@ fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
     }
 }
 
-fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
-    let num_primitives = bvh_nodes[0].num_prims;
-    let num_leaves = bvh_count_leaves(bvh_nodes, 0);
+fn bvh_count_prims(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
+    if bvh_nodes[index].num_prims != 0 {
+        bvh_nodes[index].num_prims
+    } else {
+        // Traverse left and right children and sum
+        bvh_count_prims(bvh_nodes, bvh_nodes[index].first as usize) +
+        bvh_count_prims(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
+    }
+}
 
-    eprintln!("Num prims: {}\nNum leafs: {}\nAvg prims per leaf: {:.4}\n", 
-        num_primitives, num_leaves, (num_primitives as f32) / (num_leaves as f32));
+fn bvh_depth(bvh_nodes: &Vec<BVHNode>, index: usize, depth: u32) -> u32 {
+    if bvh_nodes[index].num_prims != 0 {
+        depth
+    } else {
+        // Traverse left and right children and sum
+        bvh_depth(bvh_nodes, bvh_nodes[index].first as usize, depth + 1)
+        .max(bvh_depth(bvh_nodes, (bvh_nodes[index].first + 1) as usize, depth + 1))
+    }
+}
+
+fn bvh_shallowness(bvh_nodes: &Vec<BVHNode>, index: usize, depth: u32) -> u32 {
+    if bvh_nodes[index].num_prims != 0 {
+        depth
+    } else {
+        // Traverse left and right children and sum
+        bvh_shallowness(bvh_nodes, bvh_nodes[index].first as usize, depth + 1)
+        .min(bvh_shallowness(bvh_nodes, (bvh_nodes[index].first + 1) as usize, depth + 1))
+    }
+}
+
+fn bvh_count_nodes(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
+    if bvh_nodes[index].num_prims != 0 {
+        1
+    } else {
+        // Traverse left and right children and sum
+        bvh_count_nodes(bvh_nodes, bvh_nodes[index].first as usize) + 
+        bvh_count_nodes(bvh_nodes, (bvh_nodes[index].first + 1) as usize) + 1
+    }
+}
+
+// Imbalance: The ratio between the smaller and larger (as in, how much primitives it is parented to) node
+// Only applicable to interior nodes
+fn bvh_node_imbalance(bvh_nodes: &Vec<BVHNode>, index: usize) -> Option<f64> {
+    if bvh_nodes[index].num_prims != 0 {
+        None
+    } else {
+        let (smaller, larger) = {
+            let a = bvh_count_prims(bvh_nodes, (bvh_nodes[index].first) as usize);
+            let b = bvh_count_prims(bvh_nodes, (bvh_nodes[index].first + 1) as usize);
+            if a < b { (a, b) } else { (b, a) }
+        };
+        Some(larger as f64 / smaller as f64)
+    }
+}
+
+fn bvh_min_imbalance(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
+    if bvh_nodes[index].num_prims != 0 {
+        f64::INFINITY
+    } else {
+        bvh_min_imbalance(bvh_nodes, bvh_nodes[index].first as usize)
+        .min(bvh_min_imbalance(bvh_nodes, (bvh_nodes[index].first + 1) as usize))
+        .min(bvh_node_imbalance(bvh_nodes, index).unwrap())
+    }
+}
+
+fn bvh_max_imbalance(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
+    if bvh_nodes[index].num_prims != 0 {
+        f64::NEG_INFINITY
+    } else {
+        bvh_max_imbalance(bvh_nodes, bvh_nodes[index].first as usize)
+        .max(bvh_max_imbalance(bvh_nodes, (bvh_nodes[index].first + 1) as usize))
+        .max(bvh_node_imbalance(bvh_nodes, index).unwrap())
+    }
+}
+
+// Computed ONLY for interior nodes
+fn bvh_avg_imbalance(bvh_nodes: &Vec<BVHNode>) -> f64 {
+    let imbalance_sum = bvh_avg_imbalance_rec(bvh_nodes, 0);
+    // Subtract number of leaves here, else they would introduce bias.
+    imbalance_sum / (bvh_count_nodes(bvh_nodes, 0) - bvh_count_leaves(bvh_nodes, 0)) as f64
+}
+
+fn bvh_avg_imbalance_rec(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
+    if bvh_nodes[index].num_prims != 0 {
+        // Leaves do not have a balance, return zero.
+        0.0
+    } else {
+
+        bvh_avg_imbalance_rec(bvh_nodes, bvh_nodes[index].first as usize) +
+        (bvh_avg_imbalance_rec(bvh_nodes, (bvh_nodes[index].first + 1) as usize)) +
+        bvh_node_imbalance(bvh_nodes, index).unwrap()
+    }
+}
+
+fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
+    let num_primitives = bvh_count_prims(bvh_nodes, 0);
+    let num_leaves = bvh_count_leaves(bvh_nodes, 0);
+    let num_nodes = bvh_count_nodes(bvh_nodes, 0);
+    let depth = bvh_depth(bvh_nodes, 0, 0);
+    let shallowness = bvh_shallowness(bvh_nodes, 0, 0);
+    let avg_imbalance = bvh_avg_imbalance(bvh_nodes);
+    let min_imbalance = bvh_min_imbalance(bvh_nodes, 0);
+    let max_imbalance = bvh_max_imbalance(bvh_nodes, 0);
+
+    eprintln!("Num nodes: {}\nNum prims: {}\nNum leafs: {}\nAvg prims per leaf: {:.3}\nDepth: {}\nShallowness {}", 
+        num_nodes, num_primitives, num_leaves, (num_primitives as f32) / (num_leaves as f32), depth, shallowness);
+    eprintln!("Avg imbalance: {:.3}\nMin imbalance: {:.3}\nMax imbalance: {:.3}\n", 
+        avg_imbalance, min_imbalance, max_imbalance);
 }
 
 #[derive(Clone)]
