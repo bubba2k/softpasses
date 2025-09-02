@@ -31,7 +31,7 @@ fn main() {
     let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
 
-    let pose = camera::Pose::look_at(Vec3f::new(0.0, 4.3, 18.0), Vec3f::new(0.0, 2.0, 0.0));
+    let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
     let lens = camera::Lens::new(15, 35, aspect_ratio, 18.1, 0.0);
     let settings = tracer::render::RenderSettings {
         samples_per_pixel: 8,
@@ -40,7 +40,7 @@ fn main() {
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
     };
-    let do_denoise = true;
+    let do_denoise = false;
     let camera = Camera::new(pose, lens);
 
     // Scene setup
@@ -53,10 +53,10 @@ fn main() {
     let mat_face_dbg = MatFaceDebug::new();
 
     let floor = Parallelepiped::new(
-        vec3(-2.5, -1.0, -2.0),
-        vec3(2.5, -1.0, -2.0),
-        vec3(-2.5, -1.0, 2.0),
-        vec3(-2.5, 0.0, -2.0),
+        vec3(-1.5, -1.0, -1.0),
+        vec3(1.5, -1.0, -1.0),
+        vec3(-1.5, -1.0, 1.0),
+        vec3(-1.5, 0.0, -1.0),
         mat_floor,
     );
 
@@ -64,14 +64,14 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let sponza = BVHMesh::from_obj_file(Path::new("assets/sponza_merged.obj"), mat_rough.clone());
+    let sponza = BVHMesh::from_obj_file(Path::new("assets/bunny_normalized.obj"), mat_rough.clone());
 
     let objects = vec![sponza, floor];
 
     let env_texture =
-        Texture::from_path(Path::new("assets/Indoor1_HDRI_2K-TONEMAPPED.jpg")).unwrap();
+        Texture::from_path(Path::new("assets/Outside1_4K-TONEMAPPED.jpg")).unwrap();
 
-    let background = Background::from_environment_texture(env_texture, -3.1);
+    let background = Background::from_environment_texture(env_texture, 2.8);
 
     let world = World::new(objects, background);
 
