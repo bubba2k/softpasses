@@ -9,9 +9,10 @@ use crate::Material;
 
 #[derive(Default, Clone)]
 struct BVHNode {
-    first_prim: u32,
+    // First contains the index of the first primitive, if num_prims > 0,
+    //  else it contains the index of the left child.
+    first: u32,
     num_prims: u32,
-    left_child: u32,
     aabb: AABoundingBox,
 }
 
@@ -20,7 +21,7 @@ fn eval_sah<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Fl
     let (mut left_count, mut right_count) = (0, 0);
 
     for i in 0..node.num_prims {
-        let primitive = &primitives[(node.first_prim + i) as usize];
+        let primitive = &primitives[(node.first + i) as usize];
 
         if primitive.centroid()[axis] < split_pos {
             aabb_left.expand_aabb(&primitive.get_aabb());
@@ -62,7 +63,7 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
 
     // Find the primitive centroid that is closest to the lowest split previously computed.
     // Otherwise, a split might not actually split at all!
-    let prim_indices = (node.first_prim as usize)..((node.first_prim + node.num_prims) as usize);
+    let prim_indices = (node.first as usize)..((node.first + node.num_prims) as usize);
     let actual_pos = primitives[prim_indices].iter()
     .map(|prim| prim.centroid()[lowest_cost_split.0 as usize])
     .min_by(|a, b| {
@@ -78,12 +79,11 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
 fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
     // Always split along longest axis for now
     let node = &mut bvh_nodes[bvh_node_index as usize];
-    if node.num_prims == 1 {
-        // For leaf nodes, we do not initalize the aabb or anything like that
-        return;
-    }
-    let begin = node.first_prim as usize;
-    let end = (node.first_prim + node.num_prims) as usize;
+
+    // At the begin of a node split, the `first` member always points to the first primitive contained by the node.
+    // -> The node is currently still treated as a leaf.
+    let begin = node.first as usize;
+    let end = (node.first + node.num_prims) as usize;
     for tri in primitives[begin..end].iter() {
         node.aabb.expand_aabb(&tri.get_aabb());
     }
@@ -91,7 +91,7 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     let (axis, split_value) = best_split(node, primitives);
 
     // Sort to the left and right of split value
-    let mut i = node.first_prim;
+    let mut i = node.first;
     let mut j = i + node.num_prims - 1;
     while i < j + 1 {
         // For now, we use the first corner of each triangle as the centroid
@@ -105,7 +105,7 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     // Initialize the two children nodes and go on to subidivide them
     let left_idx = bvh_node_index * 2 + 1;
     let right_idx = bvh_node_index * 2 + 2;
-    let left_num = i - bvh_nodes[bvh_node_index as usize].first_prim;
+    let left_num = i - bvh_nodes[bvh_node_index as usize].first;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
 
     // Handle degenerate splits
@@ -114,13 +114,17 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
         return;
 
     } else {
-        bvh_nodes[left_idx as usize].first_prim = bvh_nodes[bvh_node_index as usize].first_prim;
+        bvh_nodes[left_idx as usize].first = bvh_nodes[bvh_node_index as usize].first;
         bvh_nodes[left_idx as usize].num_prims = left_num;
-        bvh_nodes[right_idx as usize].first_prim = i;
+        bvh_nodes[right_idx as usize].first = i;
         bvh_nodes[right_idx as usize].num_prims = right_num;
-        bvh_nodes[bvh_node_index as usize].left_child = left_idx;
         subdivide(bvh_nodes, primitives, left_idx);
         subdivide(bvh_nodes, primitives, right_idx);
+
+        // Since we have split this node, it is not a leaf, and thus does not contain any primitives.
+        // Its `first` member must be the index of the left child.
+        bvh_nodes[bvh_node_index as usize].first = left_idx;
+        bvh_nodes[bvh_node_index as usize].num_prims = 0;
     }
 }
 
@@ -133,7 +137,7 @@ fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>
     // Assume one triangle per leaf
     let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 1000 * num_prims - 1];
     // Set the root node
-    bvh_nodes[0].first_prim = 0;
+    bvh_nodes[0].first = 0;
     bvh_nodes[0].num_prims = num_prims as u32;
 
     subdivide(&mut bvh_nodes, &mut primitives, 0);
@@ -144,7 +148,7 @@ fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>
 }
 
 fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
-    if bvh_nodes[index].left_child == 0 {
+    if bvh_nodes[index].num_prims != 0 {
         1
     } else {
         // Traverse left and right children and sum
@@ -210,10 +214,10 @@ impl<T: HittableTrait> BVH<T> {
         // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];
 
-        // A node is a leaf if it dont have no children
-        if node.left_child == 0 {
+        // A node is a leaf if it has primitives
+        if node.num_prims != 0 {
             let range =
-                (node.first_prim as usize)..(node.first_prim as usize + node.num_prims as usize);
+                (node.first as usize)..(node.first as usize + node.num_prims as usize);
             return range
                 .map(|idx| self.hittables[idx].try_hit(ray, t_interval, num_bounces))
                 .flatten()
@@ -287,11 +291,11 @@ impl BVHMesh {
         // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];
 
-        // A node is a leaf if it dont have no children
-        if node.left_child == 0 {
+        // A node is a leaf if it has primitives
+        if node.num_prims != 0 {
             // eprintln!("Hit primitve at {}", bvh_idx);
             let range =
-                (node.first_prim as usize)..(node.first_prim as usize + node.num_prims as usize);
+                (node.first as usize)..(node.first as usize + node.num_prims as usize);
             return range
                 .map(|idx| (idx as u32, &self.triangles[idx]))
                 .map(|(idx, tri)| {
