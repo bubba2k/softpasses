@@ -784,7 +784,7 @@ pub struct Triangle {
 
 impl HittableTrait for Triangle {
     fn centroid(&self) -> Vec3f {
-        (self.positions[0] + self.positions[1] + self.positions[2]) / 3.0
+        (self.positions[0] + self.positions[1] + self.positions[2]) * 0.33333;
     }
 
     fn get_aabb(&self) -> AABoundingBox {
