@@ -1,7 +1,4 @@
-use itertools::Itertools;
-
 use super::hittable::{HittableTrait, AABoundingBox, Triangle, Hittable, HitRecord};
-use core::num;
 use std::path::Path;
 use crate::{Vec3f, Float};
 use crate::{Transformable, Transform};
@@ -19,7 +16,7 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
-fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Float, axis: usize) -> Float {
+fn eval_sah<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Float, axis: usize) -> Float {
     let (mut aabb_left, mut aabb_right) = (AABoundingBox::default(), AABoundingBox::default());
     let (mut left_count, mut right_count) = (0, 0);
 
@@ -58,8 +55,8 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
     }).flatten().collect();
 
     let lowest_cost_split = split_candidates.iter().min_by(|a, b| {
-        let sah_a = eval_SAH(node, primitives, a.1, a.0 as usize);
-        let sah_b = eval_SAH(node, primitives, b.1, b.0 as usize);
+        let sah_a = eval_sah(node, primitives, a.1, a.0 as usize);
+        let sah_b = eval_sah(node, primitives, b.1, b.0 as usize);
 
         sah_a.total_cmp(&sah_b)
     }).expect("Attempted to find best split on empty node");
