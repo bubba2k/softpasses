@@ -3,7 +3,7 @@
 // and glams handy Vec_A types aligned for SSE2
 // Note that Float and Vec3f components must have same precision.
 pub type Float = f32;
-pub type Vec3f = glam::Vec3A;
+pub type Vec3f = glam::Vec3;
 
 pub type Color = Vec3f;
 pub type Pixel = glam::U8Vec3;

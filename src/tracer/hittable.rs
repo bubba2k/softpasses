@@ -811,7 +811,7 @@ impl Transformable for Triangle {
         let normal_mat = affine.matrix3.inverse().transpose();
 
         Triangle {
-            positions: self.positions.into_iter().map(|p| affine.transform_point3a(p) ).collect::<Vec<Vec3f>>().try_into().unwrap(),
+            positions: self.positions.into_iter().map(|p| affine.transform_point3(p) ).collect::<Vec<Vec3f>>().try_into().unwrap(),
             normals: self.positions.into_iter().map(|p| (normal_mat * p).normalize() ).collect::<Vec<Vec3f>>().try_into().unwrap(),
         }
     }
