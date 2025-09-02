@@ -37,9 +37,7 @@ fn eval_SAH<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Fl
 
     let aabb_area = |aabb: &AABoundingBox| { 
         let extent = aabb.max - aabb.min;
-        // Strictly speaking, this is only half the actual surface of the box, but we only compare
-        // between them, dont care about absolute values, so it is fine.
-        let area = extent[0] * extent[1] + extent[0] * extent[2] + extent[1] * extent[2];
+        let area = 2.0 * extent[0] * extent[1] + 2.0 * extent[0] * extent[2] + 2.0 * extent[1] * extent[2];
         area
     };
 
