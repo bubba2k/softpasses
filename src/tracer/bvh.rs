@@ -111,7 +111,6 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     let right_idx = bvh_node_index * 2 + 2;
     let left_num = i - bvh_nodes[bvh_node_index as usize].first_prim;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
-    eprintln!("left child: {} | right child: {}", left_num, right_num);
 
     // Handle degenerate splits
     if left_num == 0 || right_num == 0 {
@@ -132,8 +131,8 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
 
 fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
     // The recursive func to build the BVH search tree
-
     eprintln!("Building BVH.");
+    let start = std::time::Instant::now();
     let num_prims = primitives.len();
 
     // Assume one triangle per leaf
@@ -144,8 +143,27 @@ fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>
 
     subdivide(&mut bvh_nodes, &mut primitives, 0);
 
-    eprintln!("Built BVH.");
+    eprintln!("Built BVH in {:.3} s", start.elapsed().as_secs_f32());
+    bvh_info(&bvh_nodes);
     (primitives, bvh_nodes)
+}
+
+fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
+    if bvh_nodes[index].left_child == 0 {
+        1
+    } else {
+        // Traverse left and right children and sum
+        bvh_count_leaves(bvh_nodes, index * 2 + 1) +
+        bvh_count_leaves(bvh_nodes, index * 2 + 2)
+    }
+}
+
+fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
+    let num_primitives = bvh_nodes[0].num_prims;
+    let num_leaves = bvh_count_leaves(bvh_nodes, 0);
+
+    eprintln!("Num prims: {}\nNum leafs: {}\nAvg prims per leaf: {:.4}\n", 
+        num_primitives, num_leaves, (num_primitives as f32) / (num_leaves as f32));
 }
 
 #[derive(Clone)]
