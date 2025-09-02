@@ -103,8 +103,8 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
         }
     }
     // Initialize the two children nodes and go on to subidivide them
-    let left_idx = bvh_node_index * 2 + 1;
-    let right_idx = bvh_node_index * 2 + 2;
+    let left_idx = bvh_node_index * 2 + 1 + 1;
+    let right_idx = bvh_node_index * 2 + 2 + 1;
     let left_num = i - bvh_nodes[bvh_node_index as usize].first;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
 
@@ -152,8 +152,8 @@ fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
         1
     } else {
         // Traverse left and right children and sum
-        bvh_count_leaves(bvh_nodes, index * 2 + 1) +
-        bvh_count_leaves(bvh_nodes, index * 2 + 2)
+        bvh_count_leaves(bvh_nodes, index * 2 + 1 + 1) +
+        bvh_count_leaves(bvh_nodes, index * 2 + 2 + 1)
     }
 }
 
@@ -225,8 +225,8 @@ impl<T: HittableTrait> BVH<T> {
         }
 
         if node.aabb.hit(ray, t_interval) {
-            let left_idx = bvh_idx * 2 + 1;
-            let right_idx = bvh_idx * 2 + 2;
+            let left_idx = bvh_idx * 2 + 1 + 1;
+            let right_idx = bvh_idx * 2 + 2 + 1;
 
             [left_idx, right_idx]
                 .iter()
@@ -310,8 +310,8 @@ impl BVHMesh {
         }
 
         if node.aabb.hit(ray, t_interval) {
-            let left_idx = bvh_idx * 2 + 1;
-            let right_idx = bvh_idx * 2 + 2;
+            let left_idx = bvh_idx * 2 + 1 + 1;
+            let right_idx = bvh_idx * 2 + 2 + 1;
 
             match (
                 Self::try_hit_rec(&self, ray, t_interval, num_bounces, left_idx),
