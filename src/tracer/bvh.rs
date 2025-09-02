@@ -112,18 +112,22 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     let left_num = i - bvh_nodes[bvh_node_index as usize].first_prim;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
     eprintln!("left child: {} | right child: {}", left_num, right_num);
-    bvh_nodes[left_idx as usize].first_prim = bvh_nodes[bvh_node_index as usize].first_prim;
-    bvh_nodes[left_idx as usize].num_prims = left_num;
-    bvh_nodes[right_idx as usize].first_prim = i;
-    bvh_nodes[right_idx as usize].num_prims = right_num;
-    // If this happens, the current node shall be a leaf.
+
+    // Handle degenerate splits
     if left_num == 0 || right_num == 0 {
+        // We do not want empty leaves! The straightforward approach is to simply abort subdivision here.
         return;
+
+    } else {
+        bvh_nodes[left_idx as usize].first_prim = bvh_nodes[bvh_node_index as usize].first_prim;
+        bvh_nodes[left_idx as usize].num_prims = left_num;
+        bvh_nodes[right_idx as usize].first_prim = i;
+        bvh_nodes[right_idx as usize].num_prims = right_num;
+        bvh_nodes[bvh_node_index as usize].left_child = left_idx;
+        bvh_nodes[bvh_node_index as usize].right_child = right_idx;
+        subdivide(bvh_nodes, primitives, left_idx);
+        subdivide(bvh_nodes, primitives, right_idx);
     }
-    bvh_nodes[bvh_node_index as usize].left_child = left_idx;
-    bvh_nodes[bvh_node_index as usize].right_child = right_idx;
-    subdivide(bvh_nodes, primitives, left_idx);
-    subdivide(bvh_nodes, primitives, right_idx);
 }
 
 fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
