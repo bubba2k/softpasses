@@ -12,7 +12,6 @@ struct BVHNode {
     first_prim: u32,
     num_prims: u32,
     left_child: u32,
-    right_child: u32,
     aabb: AABoundingBox,
 }
 
@@ -120,7 +119,6 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
         bvh_nodes[right_idx as usize].first_prim = i;
         bvh_nodes[right_idx as usize].num_prims = right_num;
         bvh_nodes[bvh_node_index as usize].left_child = left_idx;
-        bvh_nodes[bvh_node_index as usize].right_child = right_idx;
         subdivide(bvh_nodes, primitives, left_idx);
         subdivide(bvh_nodes, primitives, right_idx);
     }
