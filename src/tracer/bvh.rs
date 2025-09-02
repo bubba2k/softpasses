@@ -64,7 +64,19 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
         sah_a.total_cmp(&sah_b)
     }).expect("Attempted to find best split on empty node");
 
-    *lowest_cost_split
+    // Find the primitive centroid that is closest to the lowest split previously computed.
+    // Otherwise, a split might not actually split at all!
+    let prim_indices = (node.first_prim as usize)..((node.first_prim + node.num_prims) as usize);
+    let actual_pos = primitives[prim_indices].iter()
+    .map(|prim| prim.centroid()[lowest_cost_split.0 as usize])
+    .min_by(|a, b| {
+        let diff_a = (lowest_cost_split.1 - a).abs();
+        let diff_b = (lowest_cost_split.1 - b).abs();
+        
+        diff_a.total_cmp(&diff_b)
+    }).expect("Attempted to find best split on empty node");
+
+    (lowest_cost_split.0, actual_pos)
 }
 
 fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
@@ -87,7 +99,6 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     let mut j = i + node.num_prims - 1;
     while i < j + 1 {
         // For now, we use the first corner of each triangle as the centroid
-        // TODO: Use the actual centroid.
         if primitives[i as usize].centroid()[axis as usize] < split_value {
             i += 1;
         } else {
