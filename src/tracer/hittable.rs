@@ -780,12 +780,11 @@ impl Parallelepiped {
 pub struct Triangle {
     pub positions: [Vec3f; 3],
     pub normals: [Vec3f; 3],
-    pub centroid: Vec3f,
 }
 
 impl HittableTrait for Triangle {
     fn centroid(&self) -> Vec3f {
-        self.centroid
+        (self.positions[0] + self.positions[1] + self.positions[2]) / 3.0
     }
 
     fn get_aabb(&self) -> AABoundingBox {
@@ -814,7 +813,6 @@ impl Transformable for Triangle {
         Triangle {
             positions: self.positions.into_iter().map(|p| affine.transform_point3a(p) ).collect::<Vec<Vec3f>>().try_into().unwrap(),
             normals: self.positions.into_iter().map(|p| (normal_mat * p).normalize() ).collect::<Vec<Vec3f>>().try_into().unwrap(),
-            centroid: affine.transform_point3a(self.centroid),
         }
     }
 }
@@ -908,9 +906,7 @@ pub fn load_obj(path: &Path) -> Vec<Triangle> {
     // Group positions and normals
     let mut triangles = Vec::new();
     for i in (0..positions.len()).step_by(3) {
-        let centroid = (positions[i + 0] + positions[i + 1] + positions[i + 2]) / 3.0;
         triangles.push(Triangle {
-            centroid: centroid,
             positions: [positions[i + 0], positions[i + 1], positions[i + 2]],
             normals: [normals[i + 0], normals[i + 1], normals[i + 2]],
         });
