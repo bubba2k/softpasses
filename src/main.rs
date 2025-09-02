@@ -39,8 +39,8 @@ fn main() {
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
+        denoise: true,
     };
-    let do_denoise = false;
     let camera = Camera::new(pose, lens);
 
     // Scene setup
@@ -80,15 +80,7 @@ fn main() {
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
 
-    let denoised_image = 
-    if do_denoise {
-        render::denoise_with_albedo_normal(&render_result.combined_pass,
-            Some(&render_result.albedo_pass), Some(&render_result.normal_pass), width as usize, height as usize)
-    } else {
-        render_result.combined_pass
-    };
-
-    let pixels: Vec<Pixel> = denoised_image.iter().map(render::color_to_pixel).collect();
+    let pixels: Vec<Pixel> = render_result.combined_pass.iter().map(render::color_to_pixel).collect();
     let ppm_string = io::ppm::ppm_image(width, height, &pixels[..], comment_string);
     print!("{}", ppm_string);
 }

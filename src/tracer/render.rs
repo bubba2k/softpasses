@@ -171,40 +171,6 @@ pub fn render_region(
     colors
 }
 
-fn estimate_render_time(
-    camera: &Camera,
-    world: &World,
-    settings: &RenderSettings,
-    num_threads: u32,
-) {
-    // Attempt to get a somewhat accurate estimate of the total render time here.
-    // Render the entire image once at 1 spp, then extrapolate the entire render time from that.
-    let estimate_settings = RenderSettings {
-        samples_per_pixel: 1,
-        ..*settings
-    };
-    let estimate_start = std::time::Instant::now();
-    let region: ImageRegion = ImageRegion::whole_image(settings.image_width, settings.image_height);
-    render_region(camera, &estimate_settings, world, region, trace_ray);
-    // It seems a bit impossible to estimate how much the number of threads actually influences
-    // the render time. Assume half for more than 1. Thats it uhhh
-    let estimate_duration = estimate_start.elapsed().as_secs_f64() as Float
-                               * settings.samples_per_pixel as Float  // Attenuate for actual spp value
-                               * (1.0 / num_threads.clamp(1, 2) as Float); // Attenuate for thread count
-    let estimate_hours   = estimate_duration as u32 / 3600;
-    let estimate_minutes = (estimate_duration as u32 / 60) % 60;
-    let estimate_seconds = estimate_duration as u32 % 60;
-
-    let now = chrono::Local::now();
-    eprintln!(
-        "Started at {}\nEst. render time: {:02}:{:02}:{:02}",
-        now.format("%H:%M:%S"),
-        estimate_hours,
-        estimate_minutes,
-        estimate_seconds
-    );
-}
-
 pub fn color_to_pixel(c: &Color) -> Pixel {
     let r = util::linear_to_gamma(c[0]);
     let g = util::linear_to_gamma(c[1]);
@@ -219,12 +185,13 @@ pub struct RenderSettings {
     pub samples_per_pixel: u32,
     pub max_bounces: u32,
     pub ray_limits: util::Interval,
+    pub denoise: bool,
 }
 
 pub struct RenderResult {
     pub combined_pass: Vec<Color>,
-    pub albedo_pass: Vec<Color>,
-    pub normal_pass: Vec<Color>,
+    pub albedo_pass: Option<Vec<Color>>,
+    pub normal_pass: Option<Vec<Color>>,
     pub time_elapsed: Float,
 
     pub image_height: u32,
@@ -252,28 +219,98 @@ impl std::fmt::Display for RenderResult {
 }
 
 pub trait Scheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult;
+    fn render_pass(&self, camera: &Camera, settings: RenderSettings, world: &World, trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color) -> Vec<Color>;
+
+    fn estimate_render_time(
+        &self,
+        camera: &Camera,
+        world: &World,
+        settings: &RenderSettings,
+    ) {
+        // Attempt to get a somewhat accurate estimate of the total render time here.
+        // Render the entire image once at 1 spp, then extrapolate the full render time from that.
+        let estimate_settings = RenderSettings {
+            samples_per_pixel: 1,
+            ..*settings
+        };
+        let estimate_start = std::time::Instant::now();
+        self.render_pass(camera, estimate_settings, world, trace_ray);
+
+        // This should give a rough estimation.
+        let elapsed = estimate_start.elapsed().as_secs_f64() as f64;
+        let estimate_duration = elapsed as f64
+                                   * settings.samples_per_pixel as f64 // Attenuate for actual spp value of full render pass
+                                   + (settings.denoise as i32 as f64) * elapsed * 8.0; // Add estimated time for albedo/normal passes, if necessary.
+        let estimate_hours   = estimate_duration as u32 / 3600;
+        let estimate_minutes = (estimate_duration as u32 / 60) % 60;
+        let estimate_seconds = estimate_duration as u32 % 60;
+    
+        let now = chrono::Local::now();
+        eprintln!(
+            "Started at {}\nEst. render time: {:02}:{:02}:{:02}",
+            now.format("%H:%M:%S"),
+            estimate_hours,
+            estimate_minutes,
+            estimate_seconds
+        );
+    }
+
+
+    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
+        // Rougly estimate render time here
+        self.estimate_render_time(&camera, world, &settings);
+
+        let begin = std::time::Instant::now();
+
+        eprintln!("Combined pass...");
+        let combined_pass = self.render_pass(&camera, settings.clone(), world, trace_ray);
+
+        // We only do albedo and normal passes if we need them for denoising.
+        let (combined_pass, albedo_pass, normal_pass) = 
+        if settings.denoise {
+            let aux_pass_settings = RenderSettings {
+                samples_per_pixel: 4,
+                ..settings
+            };
+
+            eprintln!("Albedo pass...");
+            let albedo_pass = self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_albedo);
+            eprintln!("Normal pass...");
+            let normal_pass = self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_normal);
+            
+            eprintln!("Denoising...");
+            let combined_pass_denoised = denoise_with_albedo_normal(&combined_pass, Some(&albedo_pass), Some(&normal_pass), settings.image_width as usize, settings.image_height as usize);
+
+            (combined_pass_denoised, Some(albedo_pass), Some(normal_pass))
+        } else {
+            (combined_pass, None, None)
+        };
+
+        RenderResult {
+            combined_pass: combined_pass,
+            albedo_pass: albedo_pass,
+            normal_pass: normal_pass,
+            time_elapsed: begin.elapsed().as_secs_f64() as Float,
+            image_height: settings.image_height,
+            image_width: settings.image_width,
+            num_samples: settings.samples_per_pixel,
+            max_bounces: settings.max_bounces,
+            num_objects: world.objects_bvh.num_primitives(),
+        }
+    }
 }
 
 pub struct TiledScheduler {
     tile_size: u32,
 }
 
-impl TiledScheduler {
-    pub fn new(tile_size: u32) -> Self {
-        TiledScheduler {
-            tile_size: tile_size,
-        }
-    }
-
+impl Scheduler for TiledScheduler {
     fn render_pass(&self, camera: &Camera, settings: RenderSettings, world: &World, trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color) -> Vec<Color> {
         // Clamp tile size to minimum of 1 and maximum of image width.
         // -> This way, at least 1 tile fits entirely into the image.
         let tile_size_clamped = self
             .tile_size
             .clamp(1, u32::min(settings.image_height, settings.image_width));
-
-        let begin = Instant::now();
 
         // Compute the number of tiles that fit into the image, including tiles that fit only partially.
         let num_tiles_ver = settings.image_height.div_ceil(tile_size_clamped);
@@ -327,37 +364,17 @@ impl TiledScheduler {
     }
 }
 
-impl Scheduler for TiledScheduler {
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
-        // Rougly estimate render time here
-        estimate_render_time(&camera, world, &settings, 2);
-
-        let begin = std::time::Instant::now();
-
-        eprintln!("Combined pass...");
-        let combined_pass = self.render_pass(&camera, settings.clone(), world, trace_ray);
-        eprintln!("Albedo pass...");
-        let albedo_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_albedo);
-        eprintln!("Normal pass...");
-        let normal_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_normal);
-
-        RenderResult {
-            combined_pass: combined_pass,
-            albedo_pass: albedo_pass,
-            normal_pass: normal_pass,
-            time_elapsed: begin.elapsed().as_secs_f64() as Float,
-            image_height: settings.image_height,
-            image_width: settings.image_width,
-            num_samples: settings.samples_per_pixel,
-            max_bounces: settings.max_bounces,
-            num_objects: world.objects_bvh.num_primitives(),
+impl TiledScheduler {
+    pub fn new(tile_size: u32) -> Self {
+        TiledScheduler {
+            tile_size: tile_size,
         }
     }
+
+
 }
 
 fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Vec<Color>>, image_width: usize, image_height: usize) -> Vec<Color> {
-
-    eprintln!("Denoising...");
     let noisy_image: Vec<Float> = image.iter().map(|c| {
         [c[0], c[1], c[2]]
     }).flatten().collect();
