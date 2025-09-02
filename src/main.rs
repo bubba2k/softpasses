@@ -48,7 +48,7 @@ fn main() {
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
     let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
-    let mat_rough = MatLambertDiffuse::new(vec3(1.0, 0.1, 0.1));
+    let mat_rough = MatLambertDiffuse::new(vec3(0.9, 0.9, 0.9));
     let mat_normal_dbg = MatNormalDebug::new();
     let mat_face_dbg = MatFaceDebug::new();
 
@@ -64,14 +64,9 @@ fn main() {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let teapot = BVHMesh::from_obj_file(Path::new("assets/cookie/3DCookie002_HQ-1K-JPG.obj"), mat_rough.clone())
-            .apply_transform(&Transform::new()
-                .scale_uniform(30.0)
-                .translate(glam::vec3(0.0, -0.0, 0.))
-                .rotate_z(0.0)
-            );
+    let sponza = BVHMesh::from_obj_file(Path::new("assets/sponza_merged.obj"), mat_rough.clone());
 
-    let objects = vec![teapot, floor];
+    let objects = vec![sponza, floor];
 
     let env_texture =
         Texture::from_path(Path::new("assets/Indoor1_HDRI_2K-TONEMAPPED.jpg")).unwrap();
