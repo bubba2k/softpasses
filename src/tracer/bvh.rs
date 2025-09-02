@@ -76,7 +76,7 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
     (lowest_cost_split.0, actual_pos)
 }
 
-fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32) {
+fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32, next_free_index: &mut u32) {
     // Always split along longest axis for now
     let node = &mut bvh_nodes[bvh_node_index as usize];
 
@@ -103,8 +103,10 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
         }
     }
     // Initialize the two children nodes and go on to subidivide them
-    let left_idx = bvh_node_index * 2 + 1 + 1;
-    let right_idx = bvh_node_index * 2 + 2 + 1;
+    let left_idx = *next_free_index;
+    *next_free_index += 1;
+    let right_idx = *next_free_index;
+    *next_free_index += 1;
     let left_num = i - bvh_nodes[bvh_node_index as usize].first;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
 
@@ -118,8 +120,8 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
         bvh_nodes[left_idx as usize].num_prims = left_num;
         bvh_nodes[right_idx as usize].first = i;
         bvh_nodes[right_idx as usize].num_prims = right_num;
-        subdivide(bvh_nodes, primitives, left_idx);
-        subdivide(bvh_nodes, primitives, right_idx);
+        subdivide(bvh_nodes, primitives, left_idx, next_free_index);
+        subdivide(bvh_nodes, primitives, right_idx, next_free_index);
 
         // Since we have split this node, it is not a leaf, and thus does not contain any primitives.
         // Its `first` member must be the index of the left child.
@@ -134,13 +136,19 @@ fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>
     let start = std::time::Instant::now();
     let num_prims = primitives.len();
 
-    // Assume one triangle per leaf
-    let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 1000 * num_prims - 1];
+    // Assuming one primitve per leaf, this should make sure we never run out of nodes,
+    // though we also might end up wasting some space. Mathematically, it would be 2 * num_prims - 1,
+    // but we leave index 1 open (see first call to subdivide below).
+    // It might be worth instead trying to allocate nodes during BVH construction at some point.
+    let mut bvh_nodes: Vec<BVHNode> = vec![BVHNode::default(); 2 * num_prims];
     // Set the root node
     bvh_nodes[0].first = 0;
     bvh_nodes[0].num_prims = num_prims as u32;
 
-    subdivide(&mut bvh_nodes, &mut primitives, 0);
+    // Use 2 as the next free index, leaving index 1 open. That way neighbouring BVH nodes should sit snugly
+    // inside the same cache line, assuming cache line size of 64 bytes. Do not quote me on this.
+    let mut next_free_index = 2;
+    subdivide(&mut bvh_nodes, &mut primitives, 0, &mut next_free_index);
 
     eprintln!("Built BVH in {:.3} s", start.elapsed().as_secs_f32());
     bvh_info(&bvh_nodes);
@@ -152,8 +160,8 @@ fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
         1
     } else {
         // Traverse left and right children and sum
-        bvh_count_leaves(bvh_nodes, index * 2 + 1 + 1) +
-        bvh_count_leaves(bvh_nodes, index * 2 + 2 + 1)
+        bvh_count_leaves(bvh_nodes, bvh_nodes[index].first as usize) +
+        bvh_count_leaves(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
     }
 }
 
@@ -225,8 +233,8 @@ impl<T: HittableTrait> BVH<T> {
         }
 
         if node.aabb.hit(ray, t_interval) {
-            let left_idx = bvh_idx * 2 + 1 + 1;
-            let right_idx = bvh_idx * 2 + 2 + 1;
+            let left_idx = node.first;
+            let right_idx = node.first + 1;
 
             [left_idx, right_idx]
                 .iter()
@@ -310,8 +318,8 @@ impl BVHMesh {
         }
 
         if node.aabb.hit(ray, t_interval) {
-            let left_idx = bvh_idx * 2 + 1 + 1;
-            let right_idx = bvh_idx * 2 + 2 + 1;
+            let left_idx = node.first;
+            let right_idx = node.first + 1;
 
             match (
                 Self::try_hit_rec(&self, ray, t_interval, num_bounces, left_idx),
