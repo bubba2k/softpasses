@@ -2,9 +2,8 @@ use super::material::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
-use crate::math::transform::{Centroid, Transform, Transformable};
+use crate::math::transform::{Transform, Transformable};
 use crate::tracer;
-use core::panic;
 use std::path::Path;
 
 pub struct HitRecord {
@@ -291,7 +290,7 @@ impl Sphere {
 }
 
 impl Transformable for Sphere {
-    fn apply_transform(self, transform: &Transform) -> Self {
+    fn apply_transform(self, _transform: &Transform) -> Self {
         todo!()
     }
 }
@@ -376,7 +375,7 @@ impl Plane {
 }
 
 impl Transformable for Plane {
-    fn apply_transform(self, transform: &Transform) -> Self {
+    fn apply_transform(self, _transform: &Transform) -> Self {
         todo!()
     }
 }
@@ -438,7 +437,7 @@ pub struct Parallelogram {
 }
 
 impl Transformable for Parallelogram {
-    fn apply_transform(self, transform: &Transform) -> Self {
+    fn apply_transform(self, _transform: &Transform) -> Self {
         todo!()
     }
 }
@@ -645,7 +644,7 @@ pub struct Parallelepiped {
 }
 
 impl Transformable for Parallelepiped {
-    fn apply_transform(self, transform: &Transform) -> Self {
+    fn apply_transform(self, _transform: &Transform) -> Self {
         todo!()
     }
 }
