@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use rayon::prelude::*;
-use std::time::Instant;
 
 use super::material::MaterialTrait;
 use crate::math::ray::Ray;
@@ -378,7 +377,7 @@ fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Ve
     let noisy_image: Vec<Float> = image.iter().map(|c| {
         [c[0], c[1], c[2]]
     }).flatten().collect();
-    let mut denoised_image = vec![f32::default(); (image_width * image_height * 3)];
+    let mut denoised_image = vec![f32::default(); image_width * image_height * 3];
     let denoise_device = oidn::Device::new();
 
     match (albedo, normals) {

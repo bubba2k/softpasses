@@ -4,8 +4,6 @@
 mod io;
 mod math;
 mod tracer;
-
-use std::default;
 use std::path::Path;
 
 use math::util::Interval;
@@ -49,8 +47,8 @@ fn main() -> Result<(), std::io::Error> {
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
     let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
     let mat_rough = MatLambertDiffuse::new(vec3(0.9, 0.9, 0.9));
-    let mat_normal_dbg = MatNormalDebug::new();
-    let mat_face_dbg = MatFaceDebug::new();
+    let _mat_normal_dbg = MatNormalDebug::new();
+    let _mat_face_dbg = MatFaceDebug::new();
 
     let floor = Parallelepiped::new(
         vec3(-1.5, -1.0, -1.0),
