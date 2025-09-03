@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use load_image::load_data;
+use glam::Vec3;
 
 use crate::math::vector::{Color, Float};
 
@@ -14,57 +14,14 @@ pub struct Texture {
 
 impl Texture {
     pub fn from_path(path: &Path) -> Result<Self, String> {
-        if let Ok(image) = load_image::load_path(path) {
-            // Convert image data to float format
-            let image_rgba = image.into_rgba();
-            let data: Vec<Color> = image_rgba
-                .0
-                .pixels()
-                .map(|pix| {
-                    Color::new(
-                        pix.r as Float / 255.0,
-                        pix.g as Float / 255.0,
-                        pix.b as Float / 255.0,
-                    )
-                })
-                .collect();
-
-            Ok(Texture {
-                data: data,
-                height: image_rgba.0.height(),
-                width: image_rgba.0.width(),
-            })
-        } else {
-            Err(format!(
-                "Could not load texture from '{}'.",
-                path.to_str().unwrap()
-            ))
-        }
+        crate::io::image::load_path(path).map_err(|e| e.to_string())
     }
 
-    pub fn from_data(data: &[u8]) -> Result<Self, String> {
-        if let Ok(image) = load_data(data) {
-            // Convert image data to float format
-            let image_rgba = image.into_rgba();
-            let data: Vec<Color> = image_rgba
-                .0
-                .pixels()
-                .map(|pix| {
-                    Color::new(
-                        pix.r as Float / 255.0,
-                        pix.g as Float / 255.0,
-                        pix.b as Float / 255.0,
-                    )
-                })
-                .collect();
-
-            Ok(Texture {
-                data: data,
-                height: image_rgba.0.height(),
-                width: image_rgba.0.width(),
-            })
-        } else {
-            Err(String::from("Could not load texture from data."))
+    pub fn from_raw(width: usize, height: usize, data: Vec<Vec3>) -> Self {
+        Texture {
+            width,
+            height,
+            data,
         }
     }
 
