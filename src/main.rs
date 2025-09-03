@@ -26,7 +26,7 @@ use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
@@ -75,12 +75,26 @@ fn main() {
 
     let world = World::new(objects, background);
 
-    let render_result = TiledScheduler::new(64).render(camera, settings, &world);
+    let render_result = TiledScheduler::new(64).render(camera, settings.clone(), &world);
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
 
-    let pixels: Vec<Pixel> = render_result.combined_pass.iter().map(render::color_to_pixel).collect();
-    let ppm_string = io::ppm::ppm_image(width, height, &pixels[..], comment_string);
-    print!("{}", ppm_string);
+
+    let output_path = std::env::args().nth(1).expect("Please provide an output file path as the first argument.");
+    let combined_path = output_path.clone() + "_combined.ppm";
+    let combined_pixels: Vec<Pixel> = render_result.combined_pass.iter().map(render::color_to_pixel).collect();
+    io::ppm::write_ppm_image(&Path::new(&combined_path), width, height, &combined_pixels, comment_string)?;
+
+    if settings.denoise {
+        let albedo_path = output_path.clone() + "_albedo.ppm";
+        let albedo_pixels: Vec<Pixel> = render_result.albedo_pass.unwrap().iter().map(render::color_to_pixel).collect();
+        io::ppm::write_ppm_image(&Path::new(&albedo_path), width, height, &albedo_pixels, String::from("Albedo pass"))?;
+
+        let normal_path = output_path.clone() + "_normal.ppm";
+        let normal_pixels: Vec<Pixel> = render_result.normal_pass.unwrap().iter().map(render::color_to_pixel).collect();
+        io::ppm::write_ppm_image(&Path::new(&normal_path), width, height, &normal_pixels, String::from("Normal pass"))?;
+    }
+
+    Ok(())
 }
