@@ -191,6 +191,7 @@ pub struct RenderResult {
     pub combined_pass: Vec<Color>,
     pub albedo_pass: Option<Vec<Color>>,
     pub normal_pass: Option<Vec<Color>>,
+    pub denoise_pass: Option<Vec<Color>>,
     pub time_elapsed: Float,
 
     pub image_height: u32,
@@ -265,7 +266,7 @@ pub trait Scheduler {
         let combined_pass = self.render_pass(&camera, settings.clone(), world, trace_ray);
 
         // We only do albedo and normal passes if we need them for denoising.
-        let (combined_pass, albedo_pass, normal_pass) = 
+        let (denoised_pass, albedo_pass, normal_pass) = 
         if settings.denoise {
             let aux_pass_settings = RenderSettings {
                 samples_per_pixel: 4,
@@ -280,13 +281,14 @@ pub trait Scheduler {
             eprintln!("Denoising...");
             let combined_pass_denoised = denoise_with_albedo_normal(&combined_pass, Some(&albedo_pass), Some(&normal_pass), settings.image_width as usize, settings.image_height as usize);
 
-            (combined_pass_denoised, Some(albedo_pass), Some(normal_pass))
+            (Some(combined_pass_denoised), Some(albedo_pass), Some(normal_pass))
         } else {
-            (combined_pass, None, None)
+            (None, None, None)
         };
 
         RenderResult {
             combined_pass: combined_pass,
+            denoise_pass: denoised_pass,
             albedo_pass: albedo_pass,
             normal_pass: normal_pass,
             time_elapsed: begin.elapsed().as_secs_f64() as Float,

@@ -37,7 +37,7 @@ fn main() -> Result<(), std::io::Error> {
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
-        denoise: false,
+        denoise: true,
     };
     let camera = Camera::new(pose, lens);
 
@@ -92,6 +92,10 @@ fn main() -> Result<(), std::io::Error> {
         let normal_path = output_path.clone() + "_normal.ppm";
         let normal_pixels: Vec<Pixel> = render_result.normal_pass.unwrap().iter().map(render::color_to_pixel).collect();
         io::ppm::write_ppm_image(&Path::new(&normal_path), width, height, &normal_pixels, String::from("Normal pass"))?;
+
+        let normal_path = output_path.clone() + "_denoise.ppm";
+        let normal_pixels: Vec<Pixel> = render_result.denoise_pass.unwrap().iter().map(render::color_to_pixel).collect();
+        io::ppm::write_ppm_image(&Path::new(&normal_path), width, height, &normal_pixels, String::from("Denoised"))?;
     }
 
     Ok(())
