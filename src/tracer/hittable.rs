@@ -7,16 +7,16 @@ use crate::tracer;
 use core::panic;
 use std::path::Path;
 
-pub struct HitRecord<'a> {
+pub struct HitRecord {
     pub point: Vec3f,
     pub normal: Vec3f,
     pub num_bounces: u32, // How many times the ray has bounced so far
-    pub material: &'a Material,
+    pub material: Material,
     pub t: Float,
     pub front_face: bool, // True if ray hit the front of a face/surface. False if ray is on inside
 }
 
-impl<'a> HitRecord<'a> {
+impl<'a> HitRecord {
     pub fn new(
         ray: &Ray,
         t_hit: Float,
@@ -31,7 +31,7 @@ impl<'a> HitRecord<'a> {
             HitRecord {
                 point: point_hit,
                 normal: -obj_normal,
-                material: obj_mat,
+                material: obj_mat.clone(),
                 num_bounces,
                 t: t_hit,
                 front_face: false,
@@ -41,7 +41,7 @@ impl<'a> HitRecord<'a> {
             HitRecord {
                 point: point_hit,
                 normal: obj_normal,
-                material: obj_mat,
+                material: obj_mat.clone(),
                 num_bounces: num_bounces,
                 t: t_hit,
                 front_face: true,
