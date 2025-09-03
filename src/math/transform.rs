@@ -75,7 +75,3 @@ impl Transform {
         &self.affine
     }
 }
-
-pub trait Centroid {
-    fn centroid(&self) -> Vec3;
-}
