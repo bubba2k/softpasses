@@ -35,10 +35,7 @@ impl Viewport {
             self.topleft + self.viewright * u * self.width + self.viewdown * v * self.height;
         let dir = (target - origin).normalize();
 
-        Ray {
-            orig: origin,
-            dir: dir,
-        }
+        Ray::new(&origin, &dir)
     }
 }
 

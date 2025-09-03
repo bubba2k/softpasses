@@ -4,6 +4,7 @@ use crate::math::vector::{Float, Vec3f};
 pub struct Ray {
     pub orig: Vec3f,
     pub dir: Vec3f,
+    pub inv_dir: Vec3f,
 }
 
 impl Ray {
@@ -11,6 +12,7 @@ impl Ray {
         Ray {
             orig: origin.clone(),
             dir: dir.clone(),
+            inv_dir: 1.0 / dir.clone(),
         }
     }
 
@@ -21,7 +23,7 @@ impl Ray {
     pub fn step(&self, fac: Float) -> Self {
         Ray {
             orig: self.orig + (self.dir) * fac,
-            dir: self.dir,
+            ..*self
         }
     }
 }

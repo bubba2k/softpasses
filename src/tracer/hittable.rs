@@ -209,7 +209,7 @@ impl AABoundingBox {
         let mut tmax = t_interval.max;
 
         for i in 0..3 {
-            let inv_d = 1.0 / ray.dir[i];
+            let inv_d = ray.inv_dir[i];
             let mut t0 = (self.min[i] - ray.orig[i]) * inv_d;
             let mut t1 = (self.max[i] - ray.orig[i]) * inv_d;
             if inv_d < 0.0 {
