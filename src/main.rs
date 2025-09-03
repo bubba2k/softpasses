@@ -39,7 +39,7 @@ fn main() -> Result<(), std::io::Error> {
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
-        denoise: true,
+        denoise: false,
     };
     let camera = Camera::new(pose, lens);
 
