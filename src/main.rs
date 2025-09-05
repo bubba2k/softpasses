@@ -18,7 +18,6 @@ use tracer::material::{
     MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
     Material, MaterialTrait,
 };
-use crate::tracer::render;
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
@@ -67,9 +66,9 @@ fn main() -> Result<(), std::io::Error> {
     let objects = vec![sponza, floor];
 
     let env_texture =
-        Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
+        Texture::from_path(Path::new("assets/hdri/overcastpines_4k.hdr")).unwrap();
 
-    let background = Background::from_environment_texture(env_texture, 2.8);
+    let background = Background::from_environment_texture(env_texture, 0.0);
 
     let world = World::new(objects, background);
 
@@ -80,22 +79,18 @@ fn main() -> Result<(), std::io::Error> {
 
 
     let output_path = std::env::args().nth(1).expect("Please provide an output file path as the first argument.");
-    let combined_path = output_path.clone() + "_combined.ppm";
-    let combined_pixels: Vec<Pixel> = render_result.combined_pass.iter().map(render::color_to_pixel).collect();
-    io::ppm::write_ppm_image(&Path::new(&combined_path), width, height, &combined_pixels, comment_string)?;
+    let combined_path = output_path.clone() + "_combined.png";
+    render_result.combined_pass.write_png(&Path::new(&combined_path));
 
     if settings.denoise {
-        let albedo_path = output_path.clone() + "_albedo.ppm";
-        let albedo_pixels: Vec<Pixel> = render_result.albedo_pass.unwrap().iter().map(render::color_to_pixel).collect();
-        io::ppm::write_ppm_image(&Path::new(&albedo_path), width, height, &albedo_pixels, String::from("Albedo pass"))?;
+        let albedo_path = output_path.clone() + "_albedo.png";
+        render_result.albedo_pass.unwrap().write_png(&Path::new(&albedo_path));
 
-        let normal_path = output_path.clone() + "_normal.ppm";
-        let normal_pixels: Vec<Pixel> = render_result.normal_pass.unwrap().iter().map(render::color_to_pixel).collect();
-        io::ppm::write_ppm_image(&Path::new(&normal_path), width, height, &normal_pixels, String::from("Normal pass"))?;
+        let normal_path = output_path.clone() + "_normal.png";
+        render_result.normal_pass.unwrap().write_png(&Path::new(&normal_path));
 
-        let normal_path = output_path.clone() + "_denoise.ppm";
-        let normal_pixels: Vec<Pixel> = render_result.denoise_pass.unwrap().iter().map(render::color_to_pixel).collect();
-        io::ppm::write_ppm_image(&Path::new(&normal_path), width, height, &normal_pixels, String::from("Denoised"))?;
+        let denoise_path = output_path.clone() + "_denoise.png";
+        render_result.denoise_pass.unwrap().write_png(&Path::new(&denoise_path));
     }
 
     Ok(())

@@ -4,4 +4,4 @@ then
 	exit
 fi
 
-cargo run --release $1; feh "${1}_albedo.ppm" 2> /dev/null; feh "${1}_normal.ppm" 2> /dev/null; feh "${1}_combined.ppm"; feh "${1}_denoise.ppm" 2> /dev/null;
+cargo run --release $1; feh "${1}_albedo.png" 2> /dev/null; feh "${1}_normal.png" 2> /dev/null; feh "${1}_combined.png"; feh "${1}_denoise.png" 2> /dev/null;
