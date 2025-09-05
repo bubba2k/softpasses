@@ -7,6 +7,7 @@ use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float, Pixel};
 use crate::tracer::camera::Camera;
 use crate::tracer::hittable::HittableTrait;
+use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
 
 fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color {
@@ -188,10 +189,10 @@ pub struct RenderSettings {
 }
 
 pub struct RenderResult {
-    pub combined_pass: Vec<Color>,
-    pub albedo_pass: Option<Vec<Color>>,
-    pub normal_pass: Option<Vec<Color>>,
-    pub denoise_pass: Option<Vec<Color>>,
+    pub combined_pass: Texture,
+    pub albedo_pass: Option<Texture>,
+    pub normal_pass: Option<Texture>,
+    pub denoise_pass: Option<Texture>,
     pub time_elapsed: Float,
 
     pub image_height: u32,
@@ -281,13 +282,17 @@ pub trait Scheduler {
             eprintln!("Denoising...");
             let combined_pass_denoised = denoise_with_albedo_normal(&combined_pass, Some(&albedo_pass), Some(&normal_pass), settings.image_width as usize, settings.image_height as usize);
 
-            (Some(combined_pass_denoised), Some(albedo_pass), Some(normal_pass))
+            (
+                Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, combined_pass_denoised)),
+                Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, albedo_pass.clone())),
+                Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, normal_pass.clone()))
+            )
         } else {
             (None, None, None)
         };
 
         RenderResult {
-            combined_pass: combined_pass,
+            combined_pass: Texture::from_raw(settings.image_width as usize, settings.image_height as usize, combined_pass),
             denoise_pass: denoised_pass,
             albedo_pass: albedo_pass,
             normal_pass: normal_pass,
@@ -426,18 +431,23 @@ fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Ve
             // Prefilter the albedo and normal passes
             oidn::RayTracing::new(&denoise_device)
             .srgb(false)
+            .hdr(true)
             .image_dimensions(image_width as usize, image_height as usize)
             .filter(&albedo_flattened, &mut albedo_denoised)
             .expect("Denoise filter config error.");
 
             oidn::RayTracing::new(&denoise_device)
             .srgb(false)
+            .hdr(true)
             .image_dimensions(image_width as usize, image_height as usize)
             .filter(&normals_flattened, &mut normal_denoised)
             .expect("Denoise filter config error.");
 
             oidn::RayTracing::new(&denoise_device)
             .srgb(false)
+            .hdr(true)
+            // .clean_aux(true) // TODO: Ideally, this should be enabled, but we should do some further testing to evaluate whether
+            // our aux passes are clean _enough_ as they currently are
             .image_dimensions(image_width as usize, image_height as usize)
             .albedo_normal(&albedo_denoised, &normal_denoised)
             .filter(&noisy_image, &mut denoised_image)
