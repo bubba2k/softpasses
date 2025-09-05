@@ -10,7 +10,7 @@ glam = "0.30.5"
 image = "0.25.6"
 itertools = "0.14.0"
 load_image = "3.3.0"
-oidn = "2.3.2"
+oidn = { git = "https://github.com/bubba2k/oidn-rs", branch = "master" }
 radiant = "0.3.0"
 rand = "0.9.1"
 rayon = "1.10.0"
