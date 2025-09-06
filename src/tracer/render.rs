@@ -286,7 +286,7 @@ pub trait Scheduler {
 
         let begin = std::time::Instant::now();
 
-        // We only do albedo and normal passes if we need them for denoising.
+        // Compute the passes
         let (color_pass, albedo_pass, normal_pass) = {
             let aux_pass_settings = RenderSettings {
                 samples_per_pixel: 8,
