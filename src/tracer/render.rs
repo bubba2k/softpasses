@@ -261,6 +261,8 @@ pub fn render_region_multipass(
     let spp_inv = 1.0 / settings.samples_per_pixel as f64;
     let offset_range = 1.0 / settings.image_height as Float;
 
+    let dof_per_dist = cam.lens.dof / cam.lens.focal_distance;
+
     for y in region.y.0..region.y.1 {
         for x in region.x.0..region.x.1 {
             let u = x as Float * du;
@@ -279,8 +281,7 @@ pub fn render_region_multipass(
                 let rnd_offset_y = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
                 // Random ray origin offset (for DOF simulation)
                 // TODO: Make it so the DOF parameter describes the *actual* depth of field
-                let blur_offset =
-                    util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
+                let blur_offset = util::rand_vec_on_unit_disc() * dof_per_dist;
                 let ray_origin = cam.pose.position
                     + cam.viewport.viewdown * blur_offset.y
                     + cam.viewport.viewright * blur_offset.x;
