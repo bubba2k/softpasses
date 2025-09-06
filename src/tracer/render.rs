@@ -168,6 +168,8 @@ fn trace_ray_multipass(
                 };
             }
 
+            // TODO: Refactor MaterialTrait::scatter such that these matches are no longer necessary.
+            // They do not really provide any useful functionality and branches tend to be bad for performance
             match hit.material.scatter(&current_ray, &hit) {
                 (Some(scatter_ray), Some(color_att)) => {
                     // Fire the reflected/scattered ray we got from the material and surface information.
@@ -233,6 +235,7 @@ pub fn render_region(
                     + cam.viewport.viewright * blur_offset.x;
                 let ray = cam
                     .viewport
+                    // Double check if the ray_at_uv func, or the camera system in general, can be optimized.
                     .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
                 color += trace_func(&ray, &settings, &world, 0)
                     * (1.0 / settings.samples_per_pixel as Float);
