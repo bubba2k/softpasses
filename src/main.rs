@@ -24,6 +24,8 @@ use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
 fn main() -> Result<(), String> {
+    let output_dir: String = std::env::args().nth(1).expect("Please provide an output directory as the first argument.");
+
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
@@ -76,9 +78,6 @@ fn main() -> Result<(), String> {
 
     let comment_string = render_result.to_string();
     eprintln!("{}", comment_string);
-
-
-    let output_dir = std::env::args().nth(1).expect("Please provide an output directory as the first argument.");
 
     render_result.write_render_passes(&Path::new(output_dir.as_str()), ".exr")?;
 
