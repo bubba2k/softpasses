@@ -25,7 +25,13 @@ pub fn ppm_image_string(width: u32, height: u32, pixels: &[Pixel], comment: Stri
     image
 }
 
-pub fn write_ppm_image(path: &std::path::Path, width: u32, height: u32, pixels: &[Pixel], comment: String) -> Result<(), std::io::Error> {
+pub fn write_ppm_image(
+    path: &std::path::Path,
+    width: u32,
+    height: u32,
+    pixels: &[Pixel],
+    comment: String,
+) -> Result<(), std::io::Error> {
     let ppm_string = ppm_image_string(width, height, pixels, comment);
 
     let mut file = File::create(path)?;

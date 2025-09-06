@@ -6,25 +6,27 @@ mod math;
 mod tracer;
 use std::path::Path;
 
+#[allow(unused_imports)]
+use crate::tracer::render::{Scheduler, TiledScheduler};
+use crate::tracer::texture::Texture;
+use crate::tracer::world::{Background, World};
+use math::transform::{Transform, Transformable};
 use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
-use math::transform::{Transform, Transformable};
+use tracer::bvh::BVHMesh;
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
 use tracer::hittable::{Hittable, Mesh, Parallelepiped, Plane, Sphere};
-use tracer::bvh::BVHMesh;
 #[allow(unused_imports)]
 use tracer::material::{
     MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
     Material, MaterialTrait,
 };
-#[allow(unused_imports)]
-use crate::tracer::render::{Scheduler, TiledScheduler};
-use crate::tracer::texture::Texture;
-use crate::tracer::world::{Background, World};
 
 fn main() -> Result<(), String> {
-    let output_dir: String = std::env::args().nth(1).expect("Please provide an output directory as the first argument.");
+    let output_dir: String = std::env::args()
+        .nth(1)
+        .expect("Please provide an output directory as the first argument.");
 
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;
@@ -67,8 +69,7 @@ fn main() -> Result<(), String> {
 
     let objects = vec![sponza, floor];
 
-    let env_texture =
-        Texture::from_path(Path::new("assets/hdri/overcastpines_4k.hdr")).unwrap();
+    let env_texture = Texture::from_path(Path::new("assets/hdri/overcastpines_4k.hdr")).unwrap();
 
     let background = Background::from_environment_texture(env_texture, 0.0);
 

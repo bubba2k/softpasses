@@ -1,11 +1,10 @@
-use super::hittable::{HittableTrait, AABoundingBox, Triangle, Hittable, HitRecord};
-use std::path::Path;
-use crate::{Vec3f, Float};
-use crate::{Transformable, Transform};
+use super::hittable::{AABoundingBox, HitRecord, Hittable, HittableTrait, Triangle};
+use crate::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
-use crate::Material;
-
+use crate::{Float, Vec3f};
+use crate::{Transform, Transformable};
+use std::path::Path;
 
 #[derive(Default, Clone)]
 struct BVHNode {
@@ -16,7 +15,12 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
-fn eval_sah<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Float, axis: usize) -> Float {
+fn eval_sah<T: HittableTrait>(
+    node: &BVHNode,
+    primitives: &Vec<T>,
+    split_pos: Float,
+    axis: usize,
+) -> Float {
     let (mut aabb_left, mut aabb_right) = (AABoundingBox::default(), AABoundingBox::default());
     let (mut left_count, mut right_count) = (0, 0);
 
@@ -32,9 +36,10 @@ fn eval_sah<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>, split_pos: Fl
         }
     }
 
-    let aabb_area = |aabb: &AABoundingBox| { 
+    let aabb_area = |aabb: &AABoundingBox| {
         let extent = aabb.max - aabb.min;
-        let area = 2.0 * extent[0] * extent[1] + 2.0 * extent[0] * extent[2] + 2.0 * extent[1] * extent[2];
+        let area =
+            2.0 * extent[0] * extent[1] + 2.0 * extent[0] * extent[2] + 2.0 * extent[1] * extent[2];
         area
     };
 
@@ -46,37 +51,55 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
     // Check a certain selection of candidate split positions here
     let num_positions = 100;
     let node_extent = node.aabb.max - node.aabb.min;
-    let split_candidates: Vec<(u32, Float)> = (0..3).map(|axis: u32| {
-        let axis_extent = node_extent[axis as usize];
-        let axis_min = node.aabb.min[axis as usize];
-        (0..=(num_positions - 1)).map(|i| {
-            (axis, axis_min + (axis_extent as f32) * (i as f32) / (num_positions as f32))
-        }).collect::<Vec<(u32, Float)>>()
-    }).flatten().collect();
+    let split_candidates: Vec<(u32, Float)> = (0..3)
+        .map(|axis: u32| {
+            let axis_extent = node_extent[axis as usize];
+            let axis_min = node.aabb.min[axis as usize];
+            (0..=(num_positions - 1))
+                .map(|i| {
+                    (
+                        axis,
+                        axis_min + (axis_extent as f32) * (i as f32) / (num_positions as f32),
+                    )
+                })
+                .collect::<Vec<(u32, Float)>>()
+        })
+        .flatten()
+        .collect();
 
-    let lowest_cost_split = split_candidates.iter().min_by(|a, b| {
-        let sah_a = eval_sah(node, primitives, a.1, a.0 as usize);
-        let sah_b = eval_sah(node, primitives, b.1, b.0 as usize);
+    let lowest_cost_split = split_candidates
+        .iter()
+        .min_by(|a, b| {
+            let sah_a = eval_sah(node, primitives, a.1, a.0 as usize);
+            let sah_b = eval_sah(node, primitives, b.1, b.0 as usize);
 
-        sah_a.total_cmp(&sah_b)
-    }).expect("Attempted to find best split on empty node");
+            sah_a.total_cmp(&sah_b)
+        })
+        .expect("Attempted to find best split on empty node");
 
     // Find the primitive centroid that is closest to the lowest split previously computed.
     // Otherwise, a split might not actually split at all!
     let prim_indices = (node.first as usize)..((node.first + node.num_prims) as usize);
-    let actual_pos = primitives[prim_indices].iter()
-    .map(|prim| prim.centroid()[lowest_cost_split.0 as usize])
-    .min_by(|a, b| {
-        let diff_a = (lowest_cost_split.1 - a).abs();
-        let diff_b = (lowest_cost_split.1 - b).abs();
-        
-        diff_a.total_cmp(&diff_b)
-    }).expect("Attempted to find best split on empty node");
+    let actual_pos = primitives[prim_indices]
+        .iter()
+        .map(|prim| prim.centroid()[lowest_cost_split.0 as usize])
+        .min_by(|a, b| {
+            let diff_a = (lowest_cost_split.1 - a).abs();
+            let diff_b = (lowest_cost_split.1 - b).abs();
+
+            diff_a.total_cmp(&diff_b)
+        })
+        .expect("Attempted to find best split on empty node");
 
     (lowest_cost_split.0, actual_pos)
 }
 
-fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Vec<T>, bvh_node_index: u32, next_free_index: &mut u32) {
+fn subdivide<T: HittableTrait>(
+    bvh_nodes: &mut Vec<BVHNode>,
+    primitives: &mut Vec<T>,
+    bvh_node_index: u32,
+    next_free_index: &mut u32,
+) {
     // Always split along longest axis for now
     let node = &mut bvh_nodes[bvh_node_index as usize];
 
@@ -114,7 +137,6 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     if left_num == 0 || right_num == 0 {
         // We do not want empty leaves! The straightforward approach is to simply abort subdivision here.
         return;
-
     } else {
         bvh_nodes[left_idx as usize].first = bvh_nodes[bvh_node_index as usize].first;
         bvh_nodes[left_idx as usize].num_prims = left_num;
@@ -130,7 +152,7 @@ fn subdivide<T: HittableTrait>(bvh_nodes: &mut Vec<BVHNode>, primitives: &mut Ve
     }
 }
 
-fn build_bvh<T: HittableTrait> (mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
+fn build_bvh<T: HittableTrait>(mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>) {
     // The recursive func to build the BVH search tree
     eprintln!("Building BVH.");
     let start = std::time::Instant::now();
@@ -160,8 +182,8 @@ fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
         1
     } else {
         // Traverse left and right children and sum
-        bvh_count_leaves(bvh_nodes, bvh_nodes[index].first as usize) +
-        bvh_count_leaves(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
+        bvh_count_leaves(bvh_nodes, bvh_nodes[index].first as usize)
+            + bvh_count_leaves(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
     }
 }
 
@@ -170,8 +192,8 @@ fn bvh_count_prims(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
         bvh_nodes[index].num_prims
     } else {
         // Traverse left and right children and sum
-        bvh_count_prims(bvh_nodes, bvh_nodes[index].first as usize) +
-        bvh_count_prims(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
+        bvh_count_prims(bvh_nodes, bvh_nodes[index].first as usize)
+            + bvh_count_prims(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
     }
 }
 
@@ -180,8 +202,11 @@ fn bvh_depth(bvh_nodes: &Vec<BVHNode>, index: usize, depth: u32) -> u32 {
         depth
     } else {
         // Traverse left and right children and sum
-        bvh_depth(bvh_nodes, bvh_nodes[index].first as usize, depth + 1)
-        .max(bvh_depth(bvh_nodes, (bvh_nodes[index].first + 1) as usize, depth + 1))
+        bvh_depth(bvh_nodes, bvh_nodes[index].first as usize, depth + 1).max(bvh_depth(
+            bvh_nodes,
+            (bvh_nodes[index].first + 1) as usize,
+            depth + 1,
+        ))
     }
 }
 
@@ -190,8 +215,11 @@ fn bvh_shallowness(bvh_nodes: &Vec<BVHNode>, index: usize, depth: u32) -> u32 {
         depth
     } else {
         // Traverse left and right children and sum
-        bvh_shallowness(bvh_nodes, bvh_nodes[index].first as usize, depth + 1)
-        .min(bvh_shallowness(bvh_nodes, (bvh_nodes[index].first + 1) as usize, depth + 1))
+        bvh_shallowness(bvh_nodes, bvh_nodes[index].first as usize, depth + 1).min(bvh_shallowness(
+            bvh_nodes,
+            (bvh_nodes[index].first + 1) as usize,
+            depth + 1,
+        ))
     }
 }
 
@@ -200,8 +228,9 @@ fn bvh_count_nodes(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
         1
     } else {
         // Traverse left and right children and sum
-        bvh_count_nodes(bvh_nodes, bvh_nodes[index].first as usize) + 
-        bvh_count_nodes(bvh_nodes, (bvh_nodes[index].first + 1) as usize) + 1
+        bvh_count_nodes(bvh_nodes, bvh_nodes[index].first as usize)
+            + bvh_count_nodes(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
+            + 1
     }
 }
 
@@ -225,8 +254,11 @@ fn bvh_min_imbalance(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
         f64::INFINITY
     } else {
         bvh_min_imbalance(bvh_nodes, bvh_nodes[index].first as usize)
-        .min(bvh_min_imbalance(bvh_nodes, (bvh_nodes[index].first + 1) as usize))
-        .min(bvh_node_imbalance(bvh_nodes, index).unwrap())
+            .min(bvh_min_imbalance(
+                bvh_nodes,
+                (bvh_nodes[index].first + 1) as usize,
+            ))
+            .min(bvh_node_imbalance(bvh_nodes, index).unwrap())
     }
 }
 
@@ -235,8 +267,11 @@ fn bvh_max_imbalance(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
         f64::NEG_INFINITY
     } else {
         bvh_max_imbalance(bvh_nodes, bvh_nodes[index].first as usize)
-        .max(bvh_max_imbalance(bvh_nodes, (bvh_nodes[index].first + 1) as usize))
-        .max(bvh_node_imbalance(bvh_nodes, index).unwrap())
+            .max(bvh_max_imbalance(
+                bvh_nodes,
+                (bvh_nodes[index].first + 1) as usize,
+            ))
+            .max(bvh_node_imbalance(bvh_nodes, index).unwrap())
     }
 }
 
@@ -252,10 +287,9 @@ fn bvh_avg_imbalance_rec(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
         // Leaves do not have a balance, return zero.
         0.0
     } else {
-
-        bvh_avg_imbalance_rec(bvh_nodes, bvh_nodes[index].first as usize) +
-        (bvh_avg_imbalance_rec(bvh_nodes, (bvh_nodes[index].first + 1) as usize)) +
-        bvh_node_imbalance(bvh_nodes, index).unwrap()
+        bvh_avg_imbalance_rec(bvh_nodes, bvh_nodes[index].first as usize)
+            + (bvh_avg_imbalance_rec(bvh_nodes, (bvh_nodes[index].first + 1) as usize))
+            + bvh_node_imbalance(bvh_nodes, index).unwrap()
     }
 }
 
@@ -269,10 +303,19 @@ fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
     let min_imbalance = bvh_min_imbalance(bvh_nodes, 0);
     let max_imbalance = bvh_max_imbalance(bvh_nodes, 0);
 
-    eprintln!("Num nodes: {}\nNum prims: {}\nNum leafs: {}\nAvg prims per leaf: {:.3}\nDepth: {}\nShallowness {}", 
-        num_nodes, num_primitives, num_leaves, (num_primitives as f32) / (num_leaves as f32), depth, shallowness);
-    eprintln!("Avg imbalance: {:.3}\nMin imbalance: {:.3}\nMax imbalance: {:.3}\n", 
-        avg_imbalance, min_imbalance, max_imbalance);
+    eprintln!(
+        "Num nodes: {}\nNum prims: {}\nNum leafs: {}\nAvg prims per leaf: {:.3}\nDepth: {}\nShallowness {}",
+        num_nodes,
+        num_primitives,
+        num_leaves,
+        (num_primitives as f32) / (num_leaves as f32),
+        depth,
+        shallowness
+    );
+    eprintln!(
+        "Avg imbalance: {:.3}\nMin imbalance: {:.3}\nMax imbalance: {:.3}\n",
+        avg_imbalance, min_imbalance, max_imbalance
+    );
 }
 
 #[derive(Clone)]
@@ -326,8 +369,7 @@ impl<T: HittableTrait> BVH<T> {
 
         // A node is a leaf if it has primitives
         if node.num_prims != 0 {
-            let range =
-                (node.first as usize)..(node.first as usize + node.num_prims as usize);
+            let range = (node.first as usize)..(node.first as usize + node.num_prims as usize);
             return range
                 .map(|idx| self.hittables[idx].try_hit(ray, t_interval, num_bounces))
                 .flatten()
@@ -358,11 +400,15 @@ pub struct BVHMesh {
 impl Transformable for BVHMesh {
     fn apply_transform(self, transform: &Transform) -> Self {
         // 1. Apply transform to vertex positions and normals
-        let transformed_triangles: Vec<Triangle> = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
+        let transformed_triangles: Vec<Triangle> = self
+            .triangles
+            .into_iter()
+            .map(|tri| tri.apply_transform(transform))
+            .collect();
 
         eprintln!("Transformed {} triangles", transformed_triangles.len());
         // 2. Rebuild BVH (technically only need to this when transform
-        //    includes rotation. 
+        //    includes rotation.
         // TODO
         let (new_triangles, new_bvh_nodes) = build_bvh(transformed_triangles);
 
@@ -404,8 +450,7 @@ impl BVHMesh {
         // A node is a leaf if it has primitives
         if node.num_prims != 0 {
             // eprintln!("Hit primitve at {}", bvh_idx);
-            let range =
-                (node.first as usize)..(node.first as usize + node.num_prims as usize);
+            let range = (node.first as usize)..(node.first as usize + node.num_prims as usize);
             return range
                 .map(|idx| (idx as u32, &self.triangles[idx]))
                 .map(|(idx, tri)| {

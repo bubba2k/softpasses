@@ -52,12 +52,8 @@ fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World, _bounce
     // Fire the ray. See if it hits anything.
     if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
         match hit.material.scatter(ray, &hit) {
-            (_, Some(color)) => {
-                color
-            },
-            (_, None) => {
-                COLOR_BLACK
-            }
+            (_, Some(color)) => color,
+            (_, None) => COLOR_BLACK,
         }
     } else {
         // The ray did not hit anything. Return black
@@ -220,16 +216,21 @@ impl std::fmt::Display for RenderResult {
 }
 
 impl RenderResult {
-    pub fn write_render_passes(&self, base_dir: &std::path::Path, file_extension: &str) -> Result<(), String> {
+    pub fn write_render_passes(
+        &self,
+        base_dir: &std::path::Path,
+        file_extension: &str,
+    ) -> Result<(), String> {
         // Attempt to create the directory if it doesn't exist
         if let Err(e) = std::fs::create_dir_all(base_dir) {
             return Err(format!("Failed to create directory {:?}: {}", base_dir, e));
         }
-        
-        for pass in [(&self.albedo_pass, "albedo"),
-        (&self.combined_pass, "combined"),
-        (&self.normal_pass, "normal"),
-        (&self.denoise_pass, "denoise"),
+
+        for pass in [
+            (&self.albedo_pass, "albedo"),
+            (&self.combined_pass, "combined"),
+            (&self.normal_pass, "normal"),
+            (&self.denoise_pass, "denoise"),
         ] {
             if let (Some(pass_texture), name) = pass {
                 let file_name = String::from(name) + file_extension;
@@ -244,14 +245,15 @@ impl RenderResult {
 }
 
 pub trait Scheduler {
-    fn render_pass(&self, camera: &Camera, settings: RenderSettings, world: &World, trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color) -> Vec<Color>;
-
-    fn estimate_render_time(
+    fn render_pass(
         &self,
         camera: &Camera,
+        settings: RenderSettings,
         world: &World,
-        settings: &RenderSettings,
-    ) {
+        trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color,
+    ) -> Vec<Color>;
+
+    fn estimate_render_time(&self, camera: &Camera, world: &World, settings: &RenderSettings) {
         // Attempt to get a somewhat accurate estimate of the total render time here.
         // Render the entire image once at 1 spp, then extrapolate the full render time from that.
         let estimate_settings = RenderSettings {
@@ -266,10 +268,10 @@ pub trait Scheduler {
         let estimate_duration = elapsed as f64
                                    * settings.samples_per_pixel as f64 // Attenuate for actual spp value of full render pass
                                    + (settings.denoise as i32 as f64) * elapsed * 16.0; // Add estimated time for albedo/normal passes, if necessary.
-        let estimate_hours   = estimate_duration as u32 / 3600;
+        let estimate_hours = estimate_duration as u32 / 3600;
         let estimate_minutes = (estimate_duration as u32 / 60) % 60;
         let estimate_seconds = estimate_duration as u32 % 60;
-    
+
         let now = chrono::Local::now();
         eprintln!(
             "Started at {}\nEst. render time: {:02}:{:02}:{:02}",
@@ -279,7 +281,6 @@ pub trait Scheduler {
             estimate_seconds
         );
     }
-
 
     fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
         // Rougly estimate render time here
@@ -291,32 +292,55 @@ pub trait Scheduler {
         let combined_pass = self.render_pass(&camera, settings.clone(), world, trace_ray);
 
         // We only do albedo and normal passes if we need them for denoising.
-        let (denoised_pass, albedo_pass, normal_pass) = 
-        if settings.denoise {
+        let (denoised_pass, albedo_pass, normal_pass) = if settings.denoise {
             let aux_pass_settings = RenderSettings {
                 samples_per_pixel: 8,
                 ..settings
             };
 
             eprintln!("Albedo pass...");
-            let albedo_pass = self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_albedo);
+            let albedo_pass =
+                self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_albedo);
             eprintln!("Normal pass...");
-            let normal_pass = self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_normal);
-            
+            let normal_pass =
+                self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_normal);
+
             eprintln!("Denoising...");
-            let combined_pass_denoised = denoise_with_albedo_normal(&combined_pass, Some(&albedo_pass), Some(&normal_pass), settings.image_width as usize, settings.image_height as usize);
+            let combined_pass_denoised = denoise_with_albedo_normal(
+                &combined_pass,
+                Some(&albedo_pass),
+                Some(&normal_pass),
+                settings.image_width as usize,
+                settings.image_height as usize,
+            );
 
             (
-                Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, combined_pass_denoised)),
-                Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, albedo_pass.clone())),
-                Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, normal_pass.clone()))
+                Some(Texture::from_raw(
+                    settings.image_width as usize,
+                    settings.image_height as usize,
+                    combined_pass_denoised,
+                )),
+                Some(Texture::from_raw(
+                    settings.image_width as usize,
+                    settings.image_height as usize,
+                    albedo_pass.clone(),
+                )),
+                Some(Texture::from_raw(
+                    settings.image_width as usize,
+                    settings.image_height as usize,
+                    normal_pass.clone(),
+                )),
             )
         } else {
             (None, None, None)
         };
 
         RenderResult {
-            combined_pass: Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, combined_pass)),
+            combined_pass: Some(Texture::from_raw(
+                settings.image_width as usize,
+                settings.image_height as usize,
+                combined_pass,
+            )),
             denoise_pass: denoised_pass,
             albedo_pass: albedo_pass,
             normal_pass: normal_pass,
@@ -335,7 +359,13 @@ pub struct TiledScheduler {
 }
 
 impl Scheduler for TiledScheduler {
-    fn render_pass(&self, camera: &Camera, settings: RenderSettings, world: &World, trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color) -> Vec<Color> {
+    fn render_pass(
+        &self,
+        camera: &Camera,
+        settings: RenderSettings,
+        world: &World,
+        trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color,
+    ) -> Vec<Color> {
         // Clamp tile size to minimum of 1 and maximum of image width.
         // -> This way, at least 1 tile fits entirely into the image.
         let tile_size_clamped = self
@@ -400,99 +430,116 @@ impl TiledScheduler {
             tile_size: tile_size,
         }
     }
-
-
 }
 
-fn _denoise(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Vec<Color>>, image_width: usize, image_height: usize) -> Vec<Color> {
-    let noisy_image: Vec<Float> = image.iter().map(|c| {
-        [c[0], c[1], c[2]]
-    }).flatten().collect();
+fn _denoise(
+    image: &Vec<Color>,
+    albedo: Option<&Vec<Color>>,
+    normals: Option<&Vec<Color>>,
+    image_width: usize,
+    image_height: usize,
+) -> Vec<Color> {
+    let noisy_image: Vec<Float> = image.iter().map(|c| [c[0], c[1], c[2]]).flatten().collect();
     let mut denoised_image = vec![f32::default(); image_width * image_height * 3];
     let denoise_device = oidn::Device::new();
 
     match (albedo, normals) {
-        (None, _) => { 
+        (None, _) => {
             oidn::RayTracing::new(&denoise_device)
-            .srgb(false)
-            .image_dimensions(image_width as usize, image_height as usize)
-            .filter(&noisy_image, &mut denoised_image)
-            .expect("Denoise filter config error.");
-        },
+                .srgb(false)
+                .image_dimensions(image_width as usize, image_height as usize)
+                .filter(&noisy_image, &mut denoised_image)
+                .expect("Denoise filter config error.");
+        }
         (Some(albedo), None) => {
-            let albedo_flattened: Vec<f32> = albedo.iter().map(|c| {
-                [c[0], c[1], c[2]]
-            }).flatten().collect();
+            let albedo_flattened: Vec<f32> = albedo
+                .iter()
+                .map(|c| [c[0], c[1], c[2]])
+                .flatten()
+                .collect();
 
             // Prefilter the albedo pass
-            let mut albedo_denoised: Vec<f32> = vec![f32::default(); (image_width * image_height * 3) as usize];
+            let mut albedo_denoised: Vec<f32> =
+                vec![f32::default(); (image_width * image_height * 3) as usize];
 
             // Prefilter the albedo and normal passes
             oidn::RayTracing::new(&denoise_device)
-            .srgb(false)
-            .image_dimensions(image_width as usize, image_height as usize)
-            .filter(&albedo_flattened, &mut albedo_denoised)
-            .expect("Denoise filter config error.");
+                .srgb(false)
+                .image_dimensions(image_width as usize, image_height as usize)
+                .filter(&albedo_flattened, &mut albedo_denoised)
+                .expect("Denoise filter config error.");
 
             oidn::RayTracing::new(&denoise_device)
-            .srgb(false)
-            .image_dimensions(image_width as usize, image_height as usize)
-            .albedo(&albedo_denoised)
-            .filter(&noisy_image, &mut denoised_image)
-            .expect("Denoise filter config error.");
-        },
-        (Some(albedo), Some(normal)) => {
-            let albedo_flattened: Vec<f32> = albedo.iter().map(|c| {
-                [c[0], c[1], c[2]]
-            }).flatten().collect();
-            let normals_flattened: Vec<f32> = normal.iter().map(|c| {
-                [c[0], c[1], c[2]]
-            }).flatten().collect();
-
-            let mut albedo_denoised: Vec<f32> = vec![f32::default(); (image_width * image_height * 3) as usize];
-            let mut normal_denoised: Vec<f32> = vec![f32::default(); (image_width * image_height * 3) as usize];
-
-            // Prefilter the albedo and normal passes
-            oidn::RayTracing::new(&denoise_device)
-            .srgb(false)
-            .hdr(true)
-            .image_dimensions(image_width as usize, image_height as usize)
-            .filter(&albedo_flattened, &mut albedo_denoised)
-            .expect("Denoise filter config error.");
-
-            oidn::RayTracing::new(&denoise_device)
-            .srgb(false)
-            .hdr(true)
-            .image_dimensions(image_width as usize, image_height as usize)
-            .filter(&normals_flattened, &mut normal_denoised)
-            .expect("Denoise filter config error.");
-
-            oidn::RayTracing::new(&denoise_device)
-            .srgb(false)
-            .hdr(true)
-            // .clean_aux(true) // TODO: Ideally, this should be enabled, but we should do some further testing to evaluate whether
-            // our aux passes are clean _enough_ as they currently are
-            .image_dimensions(image_width as usize, image_height as usize)
-            .albedo_normal(&albedo_denoised, &normal_denoised)
-            .filter(&noisy_image, &mut denoised_image)
-            .expect("Denoise filter config error.");
+                .srgb(false)
+                .image_dimensions(image_width as usize, image_height as usize)
+                .albedo(&albedo_denoised)
+                .filter(&noisy_image, &mut denoised_image)
+                .expect("Denoise filter config error.");
         }
+        (Some(albedo), Some(normal)) => {
+            let albedo_flattened: Vec<f32> = albedo
+                .iter()
+                .map(|c| [c[0], c[1], c[2]])
+                .flatten()
+                .collect();
+            let normals_flattened: Vec<f32> = normal
+                .iter()
+                .map(|c| [c[0], c[1], c[2]])
+                .flatten()
+                .collect();
 
+            let mut albedo_denoised: Vec<f32> =
+                vec![f32::default(); (image_width * image_height * 3) as usize];
+            let mut normal_denoised: Vec<f32> =
+                vec![f32::default(); (image_width * image_height * 3) as usize];
+
+            // Prefilter the albedo and normal passes
+            oidn::RayTracing::new(&denoise_device)
+                .srgb(false)
+                .hdr(true)
+                .image_dimensions(image_width as usize, image_height as usize)
+                .filter(&albedo_flattened, &mut albedo_denoised)
+                .expect("Denoise filter config error.");
+
+            oidn::RayTracing::new(&denoise_device)
+                .srgb(false)
+                .hdr(true)
+                .image_dimensions(image_width as usize, image_height as usize)
+                .filter(&normals_flattened, &mut normal_denoised)
+                .expect("Denoise filter config error.");
+
+            oidn::RayTracing::new(&denoise_device)
+                .srgb(false)
+                .hdr(true)
+                // .clean_aux(true) // TODO: Ideally, this should be enabled, but we should do some further testing to evaluate whether
+                // our aux passes are clean _enough_ as they currently are
+                .image_dimensions(image_width as usize, image_height as usize)
+                .albedo_normal(&albedo_denoised, &normal_denoised)
+                .filter(&noisy_image, &mut denoised_image)
+                .expect("Denoise filter config error.");
+        }
     }
 
     if let Err(e) = denoise_device.get_error() {
         eprintln!("Error denoising image: {}", e.1);
     }
 
-    denoised_image.chunks(3).map(|c| {
-        Color::new(c[0], c[1], c[2])
-    }).collect()
+    denoised_image
+        .chunks(3)
+        .map(|c| Color::new(c[0], c[1], c[2]))
+        .collect()
 }
 
 pub fn denoise(image: &Vec<Color>, image_width: usize, image_height: usize) -> Vec<Color> {
     _denoise(image, None, None, image_width, image_height)
 }
 
-pub fn denoise_with_albedo_normal(image: &Vec<Color>, albedo: Option<&Vec<Color>>, normals: Option<&Vec<Color>>, image_width: usize, image_height: usize) -> Vec<Color>{
+pub fn denoise_with_albedo_normal(
+    image: &Vec<Color>,
+    albedo: Option<&Vec<Color>>,
+    normals: Option<&Vec<Color>>,
+    image_width: usize,
+    image_height: usize,
+) -> Vec<Color> {
     _denoise(image, albedo, normals, image_width, image_height)
 }

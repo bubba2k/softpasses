@@ -1,7 +1,7 @@
+pub mod bvh;
 pub mod camera;
 pub mod hittable;
 pub mod material;
 pub mod render;
 pub mod texture;
 pub mod world;
-pub mod bvh;

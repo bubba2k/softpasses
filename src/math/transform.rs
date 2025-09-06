@@ -1,4 +1,4 @@
-use glam::{Vec3, Affine3A, vec3, Quat};
+use glam::{Affine3A, Quat, Vec3, vec3};
 
 pub trait Transformable {
     fn apply_transform(self, transform: &Transform) -> Self;
@@ -11,7 +11,7 @@ pub struct Transform {
 impl Transformable for Transform {
     fn apply_transform(self, transform: &Transform) -> Self {
         Transform {
-            affine: transform.affine * self.affine
+            affine: transform.affine * self.affine,
         }
     }
 }

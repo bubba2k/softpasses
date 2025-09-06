@@ -52,7 +52,11 @@ impl Texture {
                     color.z.powf(1.0 / 2.2),
                 );
                 let color = srgb;
-                img.put_pixel(x as u32, y as u32, image::Rgba([color.x, color.y, color.z, 1.0]));
+                img.put_pixel(
+                    x as u32,
+                    y as u32,
+                    image::Rgba([color.x, color.y, color.z, 1.0]),
+                );
             }
         }
 

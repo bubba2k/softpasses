@@ -1,8 +1,8 @@
 use super::material::Material;
 use crate::math::ray::Ray;
+use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
-use crate::math::transform::{Transform, Transformable};
 use crate::tracer;
 use std::path::Path;
 
@@ -100,14 +100,17 @@ impl Transformable for Hittable {
     fn apply_transform(self, transform: &Transform) -> Self {
         match self {
             Hittable::Sphere(sphere) => Hittable::Sphere(sphere.apply_transform(transform)),
-            Hittable::Parallelepiped(parallelepiped) => Hittable::Parallelepiped(parallelepiped.apply_transform(transform)),
-            Hittable::Parallelogram(parallelogram) => Hittable::Parallelogram(parallelogram.apply_transform(transform)),
+            Hittable::Parallelepiped(parallelepiped) => {
+                Hittable::Parallelepiped(parallelepiped.apply_transform(transform))
+            }
+            Hittable::Parallelogram(parallelogram) => {
+                Hittable::Parallelogram(parallelogram.apply_transform(transform))
+            }
             Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
             Hittable::Mesh(mesh) => Hittable::Mesh(mesh.apply_transform(transform)),
             Hittable::BVHMesh(bvh_mesh) => Hittable::BVHMesh(bvh_mesh.apply_transform(transform)),
         }
     }
-
 }
 
 impl HittableTrait for Hittable {
@@ -810,8 +813,20 @@ impl Transformable for Triangle {
         let normal_mat = affine.matrix3.inverse().transpose();
 
         Triangle {
-            positions: self.positions.into_iter().map(|p| affine.transform_point3(p) ).collect::<Vec<Vec3f>>().try_into().unwrap(),
-            normals: self.positions.into_iter().map(|p| (normal_mat * p).normalize() ).collect::<Vec<Vec3f>>().try_into().unwrap(),
+            positions: self
+                .positions
+                .into_iter()
+                .map(|p| affine.transform_point3(p))
+                .collect::<Vec<Vec3f>>()
+                .try_into()
+                .unwrap(),
+            normals: self
+                .positions
+                .into_iter()
+                .map(|p| (normal_mat * p).normalize())
+                .collect::<Vec<Vec3f>>()
+                .try_into()
+                .unwrap(),
         }
     }
 }
@@ -844,7 +859,6 @@ impl Triangle {
         if interval.contains(t) { Some(t) } else { None }
     }
 }
-
 
 #[derive(Clone)]
 pub struct Mesh {
@@ -936,14 +950,17 @@ impl Mesh {
 impl Transformable for Mesh {
     fn apply_transform(self, transform: &Transform) -> Self {
         // 1. Apply transform to vertex positions and normals
-        let transformed_triangles: Vec<Triangle> = self.triangles.into_iter().map(|tri| tri.apply_transform(transform)).collect();
+        let transformed_triangles: Vec<Triangle> = self
+            .triangles
+            .into_iter()
+            .map(|tri| tri.apply_transform(transform))
+            .collect();
         let mut new_aabb = AABoundingBox::default();
-        
+
         for tri in transformed_triangles.iter() {
             new_aabb.expand(&tri.positions[0]);
             new_aabb.expand(&tri.positions[1]);
             new_aabb.expand(&tri.positions[2]);
-
         }
 
         Mesh {

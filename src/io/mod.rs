@@ -1,2 +1,2 @@
-pub mod ppm;
 pub mod image;
+pub mod ppm;
