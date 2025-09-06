@@ -3,9 +3,11 @@
 
 mod io;
 mod math;
+mod postproc;
 mod tracer;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
+use crate::postproc::{PostProcessSettings, postprocess};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
@@ -24,9 +26,11 @@ use tracer::material::{
 };
 
 fn main() -> Result<(), String> {
-    let output_dir: String = std::env::args()
-        .nth(1)
-        .expect("Please provide an output directory as the first argument.");
+    let output_dir = PathBuf::from(
+        std::env::args()
+            .nth(1)
+            .expect("Please provide an output directory as the first argument."),
+    );
 
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;
@@ -34,14 +38,17 @@ fn main() -> Result<(), String> {
 
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
     let lens = camera::Lens::new(15, 35, aspect_ratio, 18.1, 0.0);
-    let settings = tracer::render::RenderSettings {
-        samples_per_pixel: 1,
+    let render_settings = tracer::render::RenderSettings {
+        samples_per_pixel: 8,
         max_bounces: 10,
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
         denoise: true,
     };
+
+    let postproc_settings = PostProcessSettings { denoise: true };
+
     let camera = Camera::new(pose, lens);
 
     // Scene setup
@@ -75,12 +82,12 @@ fn main() -> Result<(), String> {
 
     let world = World::new(objects, background);
 
-    let render_result = TiledScheduler::new(64).render(camera, settings.clone(), &world);
+    let render_result = TiledScheduler::new(64).render(camera, render_settings.clone(), &world);
+    eprintln!("{}", render_result.to_string());
+    let postproc_result = postprocess(&render_result, &postproc_settings);
 
-    let comment_string = render_result.to_string();
-    eprintln!("{}", comment_string);
-
-    render_result.write_render_passes(&Path::new(output_dir.as_str()), ".exr")?;
+    render_result.write_images(output_dir.as_path(), ".exr")?;
+    postproc_result.write_images(output_dir.as_path())?;
 
     Ok(())
 }

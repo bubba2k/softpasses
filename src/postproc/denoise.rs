@@ -1,3 +1,8 @@
+use crate::{
+    math::vector::{Color, Float},
+    tracer::texture::Texture,
+};
+
 fn _denoise(
     image: &Vec<Color>,
     albedo: Option<&Vec<Color>>,
@@ -101,11 +106,19 @@ pub fn denoise(image: &Vec<Color>, image_width: usize, image_height: usize) -> V
 }
 
 pub fn denoise_with_albedo_normal(
-    image: &Vec<Color>,
-    albedo: Option<&Vec<Color>>,
-    normals: Option<&Vec<Color>>,
-    image_width: usize,
-    image_height: usize,
-) -> Vec<Color> {
-    _denoise(image, albedo, normals, image_width, image_height)
+    image: &Texture,
+    albedo: &Option<Texture>,
+    normal: &Option<Texture>,
+) -> Texture {
+    let albedo_data = albedo.as_ref().map_or(None, |t: &Texture| Some(&t.data));
+    let normal_data = normal.as_ref().map(|t| &t.data);
+    let denoised_data = _denoise(
+        &image.data,
+        albedo_data,
+        normal_data,
+        image.width,
+        image.height,
+    );
+
+    Texture::from_raw(image.width, image.height, denoised_data)
 }

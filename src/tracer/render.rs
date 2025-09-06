@@ -215,7 +215,7 @@ impl std::fmt::Display for RenderResult {
 }
 
 impl RenderResult {
-    pub fn write_render_passes(
+    pub fn write_images(
         &self,
         base_dir: &std::path::Path,
         file_extension: &str,
@@ -234,7 +234,7 @@ impl RenderResult {
                 let file_name = String::from(name) + file_extension;
                 let mut full_path = std::path::PathBuf::from(base_dir);
                 full_path.push(file_name);
-                pass_texture.write(full_path.as_path())?;
+                pass_texture.write_32f(full_path.as_path())?;
             }
         }
 
