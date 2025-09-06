@@ -48,6 +48,13 @@ if __name__ == "__main__":
     BRANCH2 = sys.argv[2] if len(sys.argv) > 2 else ""
     NUM_RUNS = int(sys.argv[3])
     EXECUTABLE_PATH = "./target/release/weekend_of_rays"
+
+    for branch in [BRANCH1, BRANCH2]:
+        result = subprocess.run(["git", "rev-parse", "--verify", branch], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if result.returncode != 0:
+            print(f"Error: Branch '{branch}' does not exist.")
+            sys.exit(1)
+
     results1 = perform_runs(NUM_RUNS, EXECUTABLE_PATH, BRANCH1)
     results2 = perform_runs(NUM_RUNS, EXECUTABLE_PATH, BRANCH2)
 
