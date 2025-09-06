@@ -126,7 +126,7 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u3
     }
 }
 
-fn trace_ray_multi(
+fn trace_ray_multipass(
     ray: &Ray,
     settings: &RenderSettings,
     world: &World,
@@ -243,6 +243,57 @@ pub fn render_region(
     colors
 }
 
+// Render a specific region of the image.
+pub fn render_region_multipass(
+    cam: &Camera,
+    settings: &RenderSettings,
+    world: &World,
+    region: util::ImageRegion,
+) -> (Vec<Color>, Vec<Color>, Vec<Color>) {
+    let mut color_buf = Vec::<Color>::new();
+    let mut albedo_buf = Vec::<Color>::new();
+    let mut normal_buf = Vec::<Color>::new();
+    let offset_range = 1.0 / settings.image_height as Float;
+
+    for y in region.y.0..region.y.1 {
+        for x in region.x.0..region.x.1 {
+            let u = x as Float / settings.image_width as Float;
+            let v = y as Float / settings.image_height as Float;
+            let mut color: Color = Color::default();
+            let mut albedo: Color = Color::default();
+            let mut normal: Color = Color::default();
+            // Perform multisampling here.
+            for _ in 0..settings.samples_per_pixel {
+                // The random offset into the pixel square we are considering atm (for multisampling)
+                // TODO: Make this discy instead
+                let rnd_offset_x = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
+                let rnd_offset_y = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
+                // Random ray origin offset (for DOF simulation)
+                // TODO: Make it so the DOF parameter describes the *actual* depth of field
+                let blur_offset =
+                    util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
+                let ray_origin = cam.pose.position
+                    + cam.viewport.viewdown * blur_offset.y
+                    + cam.viewport.viewright * blur_offset.x;
+                let ray = cam
+                    .viewport
+                    .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
+
+                let (new_color, new_albedo, new_normal) =
+                    trace_ray_multipass(&ray, &settings, &world, 0);
+
+                color += new_color * (1.0 / settings.samples_per_pixel as Float);
+                albedo += new_albedo * (1.0 / settings.samples_per_pixel as Float);
+                normal += new_normal * (1.0 / settings.samples_per_pixel as Float);
+            }
+            color_buf.push(color);
+            albedo_buf.push(albedo);
+            normal_buf.push(normal);
+        }
+    }
+    (color_buf, albedo_buf, normal_buf)
+}
+
 pub fn color_to_pixel(c: &Color) -> Pixel {
     let r = util::linear_to_gamma(c[0]);
     let g = util::linear_to_gamma(c[1]);
@@ -327,6 +378,13 @@ pub trait Scheduler {
         trace_func: fn(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color,
     ) -> Vec<Color>;
 
+    fn render_multipass(
+        &self,
+        camera: &Camera,
+        settings: RenderSettings,
+        world: &World,
+    ) -> (Vec<Color>, Vec<Color>, Vec<Color>);
+
     fn estimate_render_time(&self, camera: &Camera, world: &World, settings: &RenderSettings) {
         // Attempt to get a somewhat accurate estimate of the total render time here.
         // Render the entire image once at 1 spp, then extrapolate the full render time from that.
@@ -369,7 +427,11 @@ pub trait Scheduler {
                 ..settings
             };
 
-            eprintln!("Performing color pass...");
+            let (color_pass, albedo_pass, normal_pass) =
+                self.render_multipass(&camera, settings.clone(), world);
+
+            /*
+            eprintln!("Performing multi pass...");
             let color_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_it);
             eprintln!("Performing albedo pass...");
             let albedo_pass =
@@ -377,6 +439,7 @@ pub trait Scheduler {
             eprintln!("Performing normal pass...");
             let normal_pass =
                 self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_normal);
+            */
 
             (
                 Some(Texture::from_raw(
@@ -478,6 +541,90 @@ impl Scheduler for TiledScheduler {
             // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
             .flatten()
             .collect()
+    }
+
+    fn render_multipass(
+        &self,
+        camera: &Camera,
+        settings: RenderSettings,
+        world: &World,
+    ) -> (Vec<Color>, Vec<Color>, Vec<Color>) {
+        // Clamp tile size to minimum of 1 and maximum of image width.
+        // -> This way, at least 1 tile fits entirely into the image.
+        let tile_size_clamped = self
+            .tile_size
+            .clamp(1, u32::min(settings.image_height, settings.image_width));
+
+        // Compute the number of tiles that fit into the image, including tiles that fit only partially.
+        let num_tiles_ver = settings.image_height.div_ceil(tile_size_clamped);
+        let num_tiles_hor = settings.image_width.div_ceil(tile_size_clamped);
+
+        let mut tiles = Vec::<ImageRegion>::new();
+        for (yi, xi) in (0..num_tiles_ver).cartesian_product(0..num_tiles_hor) {
+            let (tile_x, tile_y) = (xi * tile_size_clamped, yi * tile_size_clamped);
+            // Calculate the actual width and height of the tile. This only matters at the right and bottom
+            // edges, where a tile might not fit entirely into the screen, and we have to crop it to fit.
+            let tile_width = (settings.image_width - tile_x).clamp(0, tile_size_clamped);
+            let tile_height = (settings.image_height - tile_y).clamp(0, tile_size_clamped);
+
+            tiles.push(ImageRegion::new(tile_x, tile_y, tile_width, tile_height));
+        }
+
+        // Render out the tiles
+        let rendered_tiles: Vec<(Vec<Color>, Vec<Color>, Vec<Color>)> = tiles
+            // Rayon does all the thread magic for us here
+            .par_iter()
+            .map(|tile| render_region_multipass(&camera, &settings, &world, tile.clone()))
+            .collect();
+
+        let tiles_color: Vec<Vec<Color>> = rendered_tiles
+            .iter()
+            .map(|triple| triple.0.clone())
+            .collect();
+        let tiles_albedo: Vec<Vec<Color>> = rendered_tiles
+            .iter()
+            .map(|triple| triple.1.clone())
+            .collect();
+        let tiles_normal: Vec<Vec<Color>> = rendered_tiles
+            .iter()
+            .map(|triple| triple.2.clone())
+            .collect();
+
+        // Flatten the rendered tiles to the final image. This is a bit finicky.
+        // Helper func to flatten a row of tiles: Read all first pixel rows of all tiles, then all second, etc ...
+        let fn_flatten_tilerow = |tile_row: &[Vec<Color>], tile_height: u32| -> Vec<Color> {
+            let mut flattened_colors = Vec::default();
+            for y in 0..tile_height {
+                for tile in tile_row.iter() {
+                    let tile_width = tile.len() / tile_height as usize;
+                    let begin_idx = tile_width * y as usize;
+
+                    flattened_colors.extend_from_slice(&tile[begin_idx..(begin_idx + tile_width)]);
+                }
+            }
+
+            flattened_colors
+        };
+
+        let fn_assemble_tiles = |rendered_tiles: Vec<Vec<Color>>| {
+            rendered_tiles
+                .chunks(num_tiles_hor as usize)
+                .map(|tile_row| {
+                    // The first tile in every row is guaranted to have full width, so we can use
+                    // the tile size directly here to get the pixel height of the row.
+                    let tile_height = tile_row[0].len() as u32 / tile_size_clamped;
+                    fn_flatten_tilerow(tile_row, tile_height)
+                })
+                // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
+                .flatten()
+                .collect()
+        };
+
+        let assembled_color = fn_assemble_tiles(tiles_color);
+        let assembled_albedo = fn_assemble_tiles(tiles_albedo);
+        let assembled_normal = fn_assemble_tiles(tiles_normal);
+
+        (assembled_color, assembled_albedo, assembled_normal)
     }
 }
 
