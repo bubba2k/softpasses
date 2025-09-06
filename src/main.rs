@@ -7,7 +7,7 @@ mod tracer;
 use std::path::Path;
 
 use math::util::Interval;
-use math::vector::{Float, Vec3f, vec3, Pixel};
+use math::vector::{Float, Vec3f, vec3};
 use math::transform::{Transform, Transformable};
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
@@ -23,7 +23,7 @@ use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, World};
 
-fn main() -> Result<(), std::io::Error> {
+fn main() -> Result<(), String> {
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
@@ -78,20 +78,9 @@ fn main() -> Result<(), std::io::Error> {
     eprintln!("{}", comment_string);
 
 
-    let output_path = std::env::args().nth(1).expect("Please provide an output file path as the first argument.");
-    let combined_path = output_path.clone() + "_combined.hdr";
-    render_result.combined_pass.write(&Path::new(&combined_path));
+    let output_dir = std::env::args().nth(1).expect("Please provide an output directory as the first argument.");
 
-    if settings.denoise {
-        let albedo_path = output_path.clone() + "_albedo.hdr";
-        render_result.albedo_pass.unwrap().write(&Path::new(&albedo_path));
-
-        let normal_path = output_path.clone() + "_normal.hdr";
-        render_result.normal_pass.unwrap().write(&Path::new(&normal_path));
-
-        let denoise_path = output_path.clone() + "_denoise.hdr";
-        render_result.denoise_pass.unwrap().write(&Path::new(&denoise_path));
-    }
+    render_result.write_render_passes(&Path::new(output_dir.as_str()), ".exr")?;
 
     Ok(())
 }

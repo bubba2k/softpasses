@@ -189,7 +189,7 @@ pub struct RenderSettings {
 }
 
 pub struct RenderResult {
-    pub combined_pass: Texture,
+    pub combined_pass: Option<Texture>,
     pub albedo_pass: Option<Texture>,
     pub normal_pass: Option<Texture>,
     pub denoise_pass: Option<Texture>,
@@ -216,6 +216,30 @@ impl std::fmt::Display for RenderResult {
             self.max_bounces,
             self.num_objects
         )
+    }
+}
+
+impl RenderResult {
+    pub fn write_render_passes(&self, base_dir: &std::path::Path, file_extension: &str) -> Result<(), String> {
+        // Attempt to create the directory if it doesn't exist
+        if let Err(e) = std::fs::create_dir_all(base_dir) {
+            return Err(format!("Failed to create directory {:?}: {}", base_dir, e));
+        }
+        
+        for pass in [(&self.albedo_pass, "albedo"),
+        (&self.combined_pass, "combined"),
+        (&self.normal_pass, "normal"),
+        (&self.denoise_pass, "denoise"),
+        ] {
+            if let (Some(pass_texture), name) = pass {
+                let file_name = String::from(name) + file_extension;
+                let mut full_path = std::path::PathBuf::from(base_dir);
+                full_path.push(file_name);
+                pass_texture.write(full_path.as_path())?;
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -292,7 +316,7 @@ pub trait Scheduler {
         };
 
         RenderResult {
-            combined_pass: Texture::from_raw(settings.image_width as usize, settings.image_height as usize, combined_pass),
+            combined_pass: Some(Texture::from_raw(settings.image_width as usize, settings.image_height as usize, combined_pass)),
             denoise_pass: denoised_pass,
             albedo_pass: albedo_pass,
             normal_pass: normal_pass,
