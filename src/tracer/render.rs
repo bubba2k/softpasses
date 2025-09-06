@@ -18,26 +18,10 @@ fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -
     }
     // Fire the ray. See if it hits anything.
     if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, bounce) {
-        match hit.material.scatter(ray, &hit) {
-            (Some(scatter_ray), Some(color_att)) => {
-                // Fire the reflected/scattered ray we got from the material and surface information.
-                // Attenuate with the color attenuation applied by the material.
-                trace_ray(&scatter_ray, settings, world, bounce + 1) * color_att
-            }
-            (Some(scatter_ray), None) => {
-                // The ray was reflected, but the color not attenuated.
-                // Must be a perfect mirror or a portal or sum
-                trace_ray(&scatter_ray, settings, world, bounce + 1)
-            }
-            (None, Some(color_att)) => {
-                // Ray absorbed, just return the attenuation color.
-                color_att
-            }
-            (None, None) => {
-                // The ray was absorbed and no color is given. Must have been a black hole.
-                COLOR_BLACK
-            }
-        }
+        let (scatter_ray, color_att) = hit.material.scatter(ray, &hit);
+        // Fire the reflected/scattered ray we got from the material and surface information.
+        // Attenuate with the color attenuation applied by the material.
+        trace_ray(&scatter_ray, settings, world, bounce + 1) * color_att
     } else {
         // The ray did not hit anything. Return the background color.
         world.background.sample(ray.dir)
@@ -51,12 +35,12 @@ fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World, _bounce
     // Abort if max bounce is reached.
     // Fire the ray. See if it hits anything.
     if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
-        match hit.material.scatter(ray, &hit) {
-            (_, Some(color)) => color,
-            (_, None) => COLOR_BLACK,
-        }
+        let (_, color) = hit.material.scatter(ray, &hit);
+        color
     } else {
-        // The ray did not hit anything. Return black
+        // The ray did not hit anything. Sample the background albedo.
+        // TODO: Might be a good idea to change this, since this value can be greater than 1.0,
+        // but eg OpenImageDenoise expects albedo in range [0, 1]
         world.background.sample(ray.dir)
     }
 }
@@ -96,28 +80,11 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u3
                 .objects_bvh
                 .try_hit(&current_ray, settings.ray_limits, bounce_counter)
         {
-            match hit.material.scatter(&current_ray, &hit) {
-                (Some(scatter_ray), Some(color_att)) => {
-                    // Fire the reflected/scattered ray we got from the material and surface information.
-                    // Attenuate with the color attenuation applied by the material.
-                    current_ray = scatter_ray;
-                    ray_color = ray_color * color_att;
-                }
-                (Some(scatter_ray), None) => {
-                    // The ray was reflected, but the color not attenuated.
-                    // Simply shoot the new, attenuated ray.
-                    current_ray = scatter_ray;
-                }
-                (None, Some(color_att)) => {
-                    // Ray absorbed. Do one last attenuation and return.
-                    return ray_color * color_att;
-                }
-                (None, None) => {
-                    // The ray was absorbed and no attenuation color was given.
-                    // This should not happen, but we have to handle the case. Assume a black hole.
-                    return COLOR_BLACK;
-                }
-            }
+            let (scatter_ray, color_att) = hit.material.scatter(&current_ray, &hit);
+            // Fire the reflected/scattered ray we got from the material and surface information.
+            // Attenuate with the color attenuation applied by the material.
+            current_ray = scatter_ray;
+            ray_color = ray_color * color_att;
         } else {
             // If the ray did not hit objects, we assume it hit the background / sky.
             return ray_color * world.background.sample(current_ray.dir);
@@ -162,36 +129,15 @@ fn trace_ray_multipass(
                     -hit.normal
                 };
 
-                ray_albedo = match hit.material.scatter(ray, &hit) {
-                    (_, Some(color)) => color,
-                    (_, None) => COLOR_BLACK,
-                };
+                let (_, color) = hit.material.scatter(ray, &hit);
+                ray_albedo = color;
             }
 
-            // TODO: Refactor MaterialTrait::scatter such that these matches are no longer necessary.
-            // They do not really provide any useful functionality and branches tend to be bad for performance
-            match hit.material.scatter(&current_ray, &hit) {
-                (Some(scatter_ray), Some(color_att)) => {
-                    // Fire the reflected/scattered ray we got from the material and surface information.
-                    // Attenuate with the color attenuation applied by the material.
-                    current_ray = scatter_ray;
-                    ray_color = ray_color * color_att;
-                }
-                (Some(scatter_ray), None) => {
-                    // The ray was reflected, but the color not attenuated.
-                    // Simply shoot the new, attenuated ray.
-                    current_ray = scatter_ray;
-                }
-                (None, Some(color_att)) => {
-                    // Ray absorbed. Do one last attenuation and return.
-                    return (ray_color * color_att, ray_albedo, ray_normal);
-                }
-                (None, None) => {
-                    // The ray was absorbed and no attenuation color was given.
-                    // This should not happen, but we have to handle the case. Assume a black hole.
-                    return (COLOR_BLACK, ray_albedo, ray_normal);
-                }
-            }
+            let (scatter_ray, color_att) = hit.material.scatter(&current_ray, &hit);
+            // Fire the reflected/scattered ray we got from the material and surface information.
+            // Attenuate with the color attenuation applied by the material.
+            current_ray = scatter_ray;
+            ray_color = ray_color * color_att;
         } else {
             // If the ray did not hit objects, we assume it hit the background / sky.
             return (

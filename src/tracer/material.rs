@@ -9,7 +9,7 @@ use crate::math::vector::{Color, Float, Vec3f, vec3};
 pub trait MaterialTrait {
     // Returns None if the ray was absorbed.
     // Else, returns a new (scattered) ray and color attenuation
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>);
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color);
 
     // Return an instance of this material with randomized parameters.
     fn random_instance() -> Self;
@@ -27,7 +27,7 @@ pub enum Material {
 }
 
 impl MaterialTrait for Material {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         match self {
             Material::MatEmission(mat) => mat.scatter(ray_in, hit),
             Material::MatNormalDebug(mat) => mat.scatter(ray_in, hit),
@@ -61,14 +61,15 @@ pub struct MatNormalDebug {}
 
 impl MaterialTrait for MatNormalDebug {
     #[allow(unused_variables)]
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         let color = if hit.front_face {
             (hit.normal + 1.0) * 0.5
         } else {
             (-hit.normal + 1.0) * 0.5
         };
+        let scatter_dir = (util::rand_unit_vec() + hit.normal).normalize();
 
-        (None, Some(color))
+        (Ray::new(&hit.point, &scatter_dir), color)
     }
 
     fn random_instance() -> Self {
@@ -87,13 +88,16 @@ pub struct MatFaceDebug {}
 
 impl MaterialTrait for MatFaceDebug {
     #[allow(unused_variables)]
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         let color = if hit.front_face {
             Color::new(0.0, 1.0, 0.0)
         } else {
             Color::new(1.0, 0.0, 0.0)
         };
-        (None, Some(color))
+
+        let scatter_dir = (util::rand_unit_vec() + hit.normal).normalize();
+
+        (Ray::new(&hit.point, &scatter_dir), color)
     }
 
     fn random_instance() -> Self {
@@ -119,7 +123,7 @@ impl MatBounceDebug {
 }
 
 impl MaterialTrait for MatBounceDebug {
-    fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         static COLOR_RED: Color = Vec3f::new(1.0, 0.0, 0.0);
         static COLOR_LOW: Color = Vec3f::new(0.0, 0.0, 0.0);
         static COLOR_HIGH: Color = Vec3f::new(1.0, 1.0, 1.0);
@@ -130,7 +134,9 @@ impl MaterialTrait for MatBounceDebug {
             COLOR_LOW.lerp(COLOR_HIGH, t)
         };
 
-        (None, Some(color))
+        let scatter_dir = (util::rand_unit_vec() + hit.normal).normalize();
+
+        (Ray::new(&hit.point, &scatter_dir), color)
     }
 
     fn random_instance() -> Self {
@@ -156,15 +162,15 @@ impl MatLambertDiffuse {
 
 impl MaterialTrait for MatLambertDiffuse {
     #[allow(unused_variables)]
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         // Find the new scatter dir :)
-        let new_dir = (util::rand_unit_vec() + hit.normal).normalize();
+        let scatter_dir = (util::rand_unit_vec() + hit.normal).normalize();
         // Mr. Shirley said to catch the vectors that are "near zero".
         // Those can occur if the generated random vector is parallel but opposite direction
         // of the hit normal.
         // We do not do that here though, because it caused weird bugs, somehow.
-        let new_ray = Ray::new(&hit.point, &new_dir);
-        (Some(new_ray), Some(self.albedo))
+        let new_ray = Ray::new(&hit.point, &scatter_dir);
+        (new_ray, self.albedo)
     }
 
     fn random_instance() -> Self {
@@ -205,23 +211,23 @@ pub struct MatPrincipled {
 }
 
 impl MaterialTrait for MatPrincipled {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         if util::rand_bool(self.reflectiveness) {
             // Either we do a (fuzzy) reflection...
             let fuzz_vec = util::rand_unit_vec() * self.gloss_fuzz;
             let reflect_vec = vec_reflect(&ray_in.dir, &hit.normal);
             let new_ray = Ray::new(&hit.point, &(fuzz_vec + reflect_vec).normalize());
-            (Some(new_ray), Some(self.albedo))
+            (new_ray, self.albedo)
         } else {
             // Or do old school lambertian diffuse
             let new_dir = (util::rand_unit_vec() + hit.normal).normalize();
             // Make sure to discard those pesky too tiny vectors.
             if !new_dir.abs_diff_eq(vec3(0.0, 0.0, 0.0), 0.0001) {
                 let new_ray = Ray::new(&hit.point, &new_dir);
-                (Some(new_ray), Some(self.albedo.clone()))
+                (new_ray, self.albedo)
             } else {
                 let new_ray = Ray::new(&hit.point, &hit.normal);
-                (Some(new_ray), Some(self.albedo.clone()))
+                (new_ray, self.albedo)
             }
         }
     }
@@ -260,11 +266,10 @@ pub struct MatEmission {
 }
 
 impl MaterialTrait for MatEmission {
-    fn scatter(&self, _ray_in: &Ray, _hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        // This material simply absorbs the ray and gives back a solid color of,
-        // potentially, quite high brightness.
+    fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         let att_color = self.color * self.strength;
-        (None, Some(att_color))
+        let scatter_dir = (util::rand_unit_vec() + hit.normal).normalize();
+        (Ray::new(&hit.point, &scatter_dir), att_color)
     }
 
     fn random_instance() -> Self {
@@ -295,7 +300,7 @@ pub struct MatGlass {
 }
 
 impl MaterialTrait for MatGlass {
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Ray, Color) {
         let unit_direction = ray_in.dir;
 
         // Compute the relative index of refraction (ior) depending on whether the ray is entering or exiting the material.
@@ -317,12 +322,12 @@ impl MaterialTrait for MatGlass {
         if cant_refract || reflectance > util::rand_range_f(0.0, 1.0) {
             let ray_reflected =
                 Ray::new(&hit.point, &vec_reflect(&unit_direction, &hit.normal)).step(0.0001);
-            (Some(ray_reflected), Some(self.color))
+            (ray_reflected, self.color)
         } else {
             let dir_refracted = vec_refract(&unit_direction, &hit.normal, ior_rel);
             let ray_refracted = Ray::new(&hit.point, &dir_refracted).step(0.0001);
 
-            (Some(ray_refracted), Some(self.color))
+            (ray_refracted, self.color)
         }
     }
 
