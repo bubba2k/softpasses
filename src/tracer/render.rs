@@ -1,4 +1,3 @@
-use glam::{Vec3, vec3};
 use itertools::Itertools;
 use rayon::prelude::*;
 
