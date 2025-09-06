@@ -370,7 +370,7 @@ impl RenderResult {
 }
 
 pub trait Scheduler {
-    fn render_pass(
+    fn render_singlepass(
         &self,
         camera: &Camera,
         settings: RenderSettings,
@@ -425,7 +425,8 @@ pub trait Scheduler {
             let (color_pass, albedo_pass, normal_pass) =
                 self.render_multipass(&camera, settings.clone(), world);
 
-            /*
+            /* This is what we would do if we used singlepass tracing.
+            For now, multipass has proven to be far superior in performance.
             let aux_pass_settings = RenderSettings {
                 samples_per_pixel: 8,
                 ..settings
@@ -478,7 +479,7 @@ pub struct TiledScheduler {
 }
 
 impl Scheduler for TiledScheduler {
-    fn render_pass(
+    fn render_singlepass(
         &self,
         camera: &Camera,
         settings: RenderSettings,
@@ -513,33 +514,7 @@ impl Scheduler for TiledScheduler {
             .map(|tile| render_region(&camera, &settings, &world, tile.clone(), trace_func))
             .collect();
 
-        // Flatten the rendered tiles to the final image. This is a bit finicky.
-        // Helper func to flatten a row of tiles: Read all first pixel rows of all tiles, then all second, etc ...
-        let fn_flatten_tilerow = |tile_row: &[Vec<Color>], tile_height: u32| -> Vec<Color> {
-            let mut flattened_colors = Vec::default();
-            for y in 0..tile_height {
-                for tile in tile_row.iter() {
-                    let tile_width = tile.len() / tile_height as usize;
-                    let begin_idx = tile_width * y as usize;
-
-                    flattened_colors.extend_from_slice(&tile[begin_idx..(begin_idx + tile_width)]);
-                }
-            }
-
-            flattened_colors
-        };
-
-        rendered_tiles
-            .chunks(num_tiles_hor as usize)
-            .map(|tile_row| {
-                // The first tile in every row is guaranted to have full width, so we can use
-                // the tile size directly here to get the pixel height of the row.
-                let tile_height = tile_row[0].len() as u32 / tile_size_clamped;
-                fn_flatten_tilerow(tile_row, tile_height)
-            })
-            // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
-            .flatten()
-            .collect()
+        Self::assemble_tiles(rendered_tiles, num_tiles_hor as usize, tile_size_clamped)
     }
 
     fn render_multipass(
@@ -589,45 +564,50 @@ impl Scheduler for TiledScheduler {
             .map(|triple| triple.2.clone())
             .collect();
 
-        // Flatten the rendered tiles to the final image. This is a bit finicky.
-        // Helper func to flatten a row of tiles: Read all first pixel rows of all tiles, then all second, etc ...
-        let fn_flatten_tilerow = |tile_row: &[Vec<Color>], tile_height: u32| -> Vec<Color> {
-            let mut flattened_colors = Vec::default();
-            for y in 0..tile_height {
-                for tile in tile_row.iter() {
-                    let tile_width = tile.len() / tile_height as usize;
-                    let begin_idx = tile_width * y as usize;
-
-                    flattened_colors.extend_from_slice(&tile[begin_idx..(begin_idx + tile_width)]);
-                }
-            }
-
-            flattened_colors
-        };
-
-        let fn_assemble_tiles = |rendered_tiles: Vec<Vec<Color>>| {
-            rendered_tiles
-                .chunks(num_tiles_hor as usize)
-                .map(|tile_row| {
-                    // The first tile in every row is guaranted to have full width, so we can use
-                    // the tile size directly here to get the pixel height of the row.
-                    let tile_height = tile_row[0].len() as u32 / tile_size_clamped;
-                    fn_flatten_tilerow(tile_row, tile_height)
-                })
-                // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
-                .flatten()
-                .collect()
-        };
-
-        let assembled_color = fn_assemble_tiles(tiles_color);
-        let assembled_albedo = fn_assemble_tiles(tiles_albedo);
-        let assembled_normal = fn_assemble_tiles(tiles_normal);
+        let assembled_color =
+            Self::assemble_tiles(tiles_color, num_tiles_hor as usize, tile_size_clamped);
+        let assembled_albedo =
+            Self::assemble_tiles(tiles_albedo, num_tiles_hor as usize, tile_size_clamped);
+        let assembled_normal =
+            Self::assemble_tiles(tiles_normal, num_tiles_hor as usize, tile_size_clamped);
 
         (assembled_color, assembled_albedo, assembled_normal)
     }
 }
 
 impl TiledScheduler {
+    // Helper func to flatten a row of tiles: Read all first pixel rows of all tiles, then all second, etc ...
+    fn flatten_tilerow(tile_row: &[Vec<Color>], tile_height: u32) -> Vec<Color> {
+        let mut flattened_colors = Vec::default();
+        for y in 0..tile_height {
+            for tile in tile_row.iter() {
+                let tile_width = tile.len() / tile_height as usize;
+                let begin_idx = tile_width * y as usize;
+                flattened_colors.extend_from_slice(&tile[begin_idx..(begin_idx + tile_width)]);
+            }
+        }
+        flattened_colors
+    }
+
+    // Assemble rendered tiles back into the full image
+    fn assemble_tiles(
+        rendered_tiles: Vec<Vec<Color>>,
+        num_tiles_hor: usize,
+        tile_size_clamped: u32,
+    ) -> Vec<Color> {
+        rendered_tiles
+            .chunks(num_tiles_hor as usize)
+            .map(|tile_row| {
+                // The first tile in every row is guaranted to have full width, so we can use
+                // the tile size directly here to get the pixel height of the row.
+                let tile_height = tile_row[0].len() as u32 / tile_size_clamped;
+                Self::flatten_tilerow(tile_row, tile_height)
+            })
+            // The iterator now contains a vector of lists of colors in correct order. We can use a simple flatten now.
+            .flatten()
+            .collect()
+    }
+
     pub fn new(tile_size: u32) -> Self {
         TiledScheduler {
             tile_size: tile_size,
