@@ -26,11 +26,16 @@ use tracer::material::{
 };
 
 fn main() -> Result<(), String> {
-    let output_dir = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .expect("Please provide an output directory as the first argument."),
-    );
+    let args: Vec<String> = std::env::args().collect();
+
+    let output_dir: Option<PathBuf> = if args.len() != 2 {
+        eprintln!("No output directory specified. Starting dry run...\n");
+        None
+    } else {
+        Some(PathBuf::from(std::env::args().nth(1).expect(
+            "Please provide an output directory as the first argument.",
+        )))
+    };
 
     let width: u32 = 1280 / 4;
     let height: u32 = 1024 / 4;
@@ -86,8 +91,10 @@ fn main() -> Result<(), String> {
     eprintln!("{}", render_result.to_string());
     let postproc_result = postprocess(&render_result, &postproc_settings);
 
-    render_result.write_images(output_dir.as_path(), ".exr")?;
-    postproc_result.write_images(output_dir.as_path())?;
+    if let Some(output_dir) = output_dir {
+        render_result.write_images(output_dir.as_path(), ".exr")?;
+        postproc_result.write_images(output_dir.as_path())?;
+    }
 
     Ok(())
 }
