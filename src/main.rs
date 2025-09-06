@@ -39,7 +39,7 @@ fn main() -> Result<(), String> {
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
     let lens = camera::Lens::new(15, 35, aspect_ratio, 18.1, 0.0);
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 8,
+        samples_per_pixel: 24,
         max_bounces: 10,
         image_width: width,
         image_height: height,
