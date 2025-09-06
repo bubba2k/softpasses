@@ -1,10 +1,11 @@
+use glam::{Vec3, vec3};
 use itertools::Itertools;
 use rayon::prelude::*;
 
 use super::material::MaterialTrait;
 use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
-use crate::math::vector::{Color, Float, Pixel};
+use crate::math::vector::{Color, Float, Pixel, dvec3_to_vec3};
 use crate::tracer::camera::Camera;
 use crate::tracer::hittable::HittableTrait;
 use crate::tracer::texture::Texture;
@@ -253,15 +254,23 @@ pub fn render_region_multipass(
     let mut color_buf = Vec::<Color>::new();
     let mut albedo_buf = Vec::<Color>::new();
     let mut normal_buf = Vec::<Color>::new();
+
+    let du = 1.0 / settings.image_width as Float;
+    let dv = 1.0 / settings.image_height as Float;
+
+    let spp_inv = 1.0 / settings.samples_per_pixel as f64;
     let offset_range = 1.0 / settings.image_height as Float;
 
     for y in region.y.0..region.y.1 {
         for x in region.x.0..region.x.1 {
-            let u = x as Float / settings.image_width as Float;
-            let v = y as Float / settings.image_height as Float;
-            let mut color: Color = Color::default();
-            let mut albedo: Color = Color::default();
-            let mut normal: Color = Color::default();
+            let u = x as Float * du;
+            let v = y as Float * dv;
+
+            // We accumulate into f64 vec3s to have better precision
+            let mut color: glam::DVec3 = glam::dvec3(0.0, 0.0, 0.0);
+            let mut albedo: glam::DVec3 = glam::dvec3(0.0, 0.0, 0.0);
+            let mut normal: glam::DVec3 = glam::dvec3(0.0, 0.0, 0.0);
+
             // Perform multisampling here.
             for _ in 0..settings.samples_per_pixel {
                 // The random offset into the pixel square we are considering atm (for multisampling)
@@ -282,13 +291,13 @@ pub fn render_region_multipass(
                 let (new_color, new_albedo, new_normal) =
                     trace_ray_multipass(&ray, &settings, &world, 0);
 
-                color += new_color * (1.0 / settings.samples_per_pixel as Float);
-                albedo += new_albedo * (1.0 / settings.samples_per_pixel as Float);
-                normal += new_normal * (1.0 / settings.samples_per_pixel as Float);
+                color += glam::DVec3::from(new_color);
+                albedo += glam::DVec3::from(new_albedo);
+                normal += glam::DVec3::from(new_normal);
             }
-            color_buf.push(color);
-            albedo_buf.push(albedo);
-            normal_buf.push(normal);
+            color_buf.push(dvec3_to_vec3(color * spp_inv));
+            albedo_buf.push(dvec3_to_vec3(albedo * spp_inv));
+            normal_buf.push(dvec3_to_vec3(normal * spp_inv));
         }
     }
     (color_buf, albedo_buf, normal_buf)

@@ -12,6 +12,10 @@ pub const PLANE_XY: Vec3f = Vec3f::new(0.0, 0.0, 1.0);
 pub const PLANE_XZ: Vec3f = Vec3f::new(0.0, 1.0, 0.0);
 pub const PLANE_YZ: Vec3f = Vec3f::new(1.0, 0.0, 0.0);
 
+pub fn dvec3_to_vec3(v: glam::DVec3) -> Vec3f {
+    Vec3f::new(v.x as Float, v.y as Float, v.z as Float)
+}
+
 pub fn vec3(x: Float, y: Float, z: Float) -> Vec3f {
     Vec3f::new(x, y, z)
 }
