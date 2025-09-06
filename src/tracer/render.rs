@@ -393,7 +393,7 @@ pub trait Scheduler {
             ..*settings
         };
         let estimate_start = std::time::Instant::now();
-        self.render_pass(camera, estimate_settings, world, trace_ray);
+        self.render_multipass(camera, estimate_settings, world);
 
         // This should give a rough estimation.
         let elapsed = estimate_start.elapsed().as_secs_f64() as f64;
@@ -422,15 +422,14 @@ pub trait Scheduler {
 
         // Compute the passes
         let (color_pass, albedo_pass, normal_pass) = {
-            let aux_pass_settings = RenderSettings {
-                samples_per_pixel: 8,
-                ..settings
-            };
-
             let (color_pass, albedo_pass, normal_pass) =
                 self.render_multipass(&camera, settings.clone(), world);
 
             /*
+            let aux_pass_settings = RenderSettings {
+                samples_per_pixel: 8,
+                ..settings
+            };
             eprintln!("Performing multi pass...");
             let color_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_it);
             eprintln!("Performing albedo pass...");
