@@ -126,6 +126,82 @@ fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u3
     }
 }
 
+fn trace_ray_multi(
+    ray: &Ray,
+    settings: &RenderSettings,
+    world: &World,
+    _bounce: u32,
+) -> (Color, Color, Color) {
+    static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
+    // Initialize ray_color to the multiplicative neutral element.
+    let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
+
+    // Initialize ray_albedo and ray_normal as if the initial ray had immediately hit
+    // the background. Which is exactly what happens if the ray hits nothing on the first bounce.
+    let mut ray_albedo = world.background.sample(ray.dir);
+    let mut ray_normal = -ray.dir;
+
+    let mut current_ray: Ray = ray.clone();
+    let mut bounce_counter = 0;
+    loop {
+        if bounce_counter == settings.max_bounces {
+            // If max bounces where reached, the ray never hit a light source
+            return (COLOR_BLACK, ray_albedo, ray_normal);
+        }
+        // Fire the ray. See if it hits anything.
+        if let Some(hit) =
+            world
+                .objects_bvh
+                .try_hit(&current_ray, settings.ray_limits, bounce_counter)
+        {
+            // The albedo and normal are computed exactly ONCE on the very first bounce.
+            if bounce_counter == 0 {
+                ray_normal = if hit.front_face {
+                    hit.normal
+                } else {
+                    -hit.normal
+                };
+
+                ray_albedo = match hit.material.scatter(ray, &hit) {
+                    (_, Some(color)) => color,
+                    (_, None) => COLOR_BLACK,
+                };
+            }
+
+            match hit.material.scatter(&current_ray, &hit) {
+                (Some(scatter_ray), Some(color_att)) => {
+                    // Fire the reflected/scattered ray we got from the material and surface information.
+                    // Attenuate with the color attenuation applied by the material.
+                    current_ray = scatter_ray;
+                    ray_color = ray_color * color_att;
+                }
+                (Some(scatter_ray), None) => {
+                    // The ray was reflected, but the color not attenuated.
+                    // Simply shoot the new, attenuated ray.
+                    current_ray = scatter_ray;
+                }
+                (None, Some(color_att)) => {
+                    // Ray absorbed. Do one last attenuation and return.
+                    return (ray_color * color_att, ray_albedo, ray_normal);
+                }
+                (None, None) => {
+                    // The ray was absorbed and no attenuation color was given.
+                    // This should not happen, but we have to handle the case. Assume a black hole.
+                    return (COLOR_BLACK, ray_albedo, ray_normal);
+                }
+            }
+        } else {
+            // If the ray did not hit objects, we assume it hit the background / sky.
+            return (
+                ray_color * world.background.sample(current_ray.dir),
+                ray_albedo,
+                ray_normal,
+            );
+        }
+        bounce_counter = bounce_counter + 1;
+    }
+}
+
 // Render a specific region of the image.
 pub fn render_region(
     cam: &Camera,
@@ -294,7 +370,7 @@ pub trait Scheduler {
             };
 
             eprintln!("Performing color pass...");
-            let color_pass = self.render_pass(&camera, settings.clone(), world, trace_ray);
+            let color_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_it);
             eprintln!("Performing albedo pass...");
             let albedo_pass =
                 self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_albedo);
