@@ -3,7 +3,7 @@ use std::path::Path;
 use glam::Vec3;
 
 use crate::math::vector::{Color, Float};
-use image::{Rgb, RgbImage};
+use image::Rgba32FImage;
 
 // Does not support transparency
 #[derive(Clone)]
@@ -26,37 +26,33 @@ impl Texture {
         }
     }
 
-    pub fn write_png(&self, path: &Path) -> Result<(), String> {
-        let mut img = RgbImage::new(self.width as u32, self.height as u32);
+    pub fn write(&self, path: &Path) -> Result<(), String> {
+        let mut img = Rgba32FImage::new(self.width as u32, self.height as u32);
 
         for y in 0..self.height {
             for x in 0..self.width {
                 let color = self.data[y * self.width + x];
-                let rgb = [
-                    (color.x.clamp(0.0, 1.0) * 255.0) as u8,
-                    (color.y.clamp(0.0, 1.0) * 255.0) as u8,
-                    (color.z.clamp(0.0, 1.0) * 255.0) as u8,
-                ];
-                img.put_pixel(x as u32, y as u32, Rgb(rgb));
+                img.put_pixel(x as u32, y as u32, image::Rgba([color.x, color.y, color.z, 1.0]));
             }
         }
 
         img.save(path).map_err(|e| e.to_string())
     }
 
-    pub fn write_png_srgb(&self, path: &Path) -> Result<(), String> {
-        let mut img = RgbImage::new(self.width as u32, self.height as u32);
+    pub fn write_srgb(&self, path: &Path) -> Result<(), String> {
+        let mut img = Rgba32FImage::new(self.width as u32, self.height as u32);
 
         for y in 0..self.height {
             for x in 0..self.width {
                 let color = self.data[y * self.width + x];
-                // Convert linear RGB to sRGB
-                let srgb = [
-                    (color.x.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0) as u8,
-                    (color.y.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0) as u8,
-                    (color.z.clamp(0.0, 1.0).powf(1.0 / 2.2) * 255.0) as u8,
-                ];
-                img.put_pixel(x as u32, y as u32, Rgb(srgb));
+                // Apply sRGB gamma correction
+                let srgb = Color::new(
+                    color.x.powf(1.0 / 2.2),
+                    color.y.powf(1.0 / 2.2),
+                    color.z.powf(1.0 / 2.2),
+                );
+                let color = srgb;
+                img.put_pixel(x as u32, y as u32, image::Rgba([color.x, color.y, color.z, 1.0]));
             }
         }
 

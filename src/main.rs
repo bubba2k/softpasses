@@ -31,7 +31,7 @@ fn main() -> Result<(), std::io::Error> {
     let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
     let lens = camera::Lens::new(15, 35, aspect_ratio, 18.1, 0.0);
     let settings = tracer::render::RenderSettings {
-        samples_per_pixel: 32,
+        samples_per_pixel: 1,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -79,18 +79,18 @@ fn main() -> Result<(), std::io::Error> {
 
 
     let output_path = std::env::args().nth(1).expect("Please provide an output file path as the first argument.");
-    let combined_path = output_path.clone() + "_combined.png";
-    render_result.combined_pass.write_png(&Path::new(&combined_path));
+    let combined_path = output_path.clone() + "_combined.hdr";
+    render_result.combined_pass.write(&Path::new(&combined_path));
 
     if settings.denoise {
-        let albedo_path = output_path.clone() + "_albedo.png";
-        render_result.albedo_pass.unwrap().write_png(&Path::new(&albedo_path));
+        let albedo_path = output_path.clone() + "_albedo.hdr";
+        render_result.albedo_pass.unwrap().write(&Path::new(&albedo_path));
 
-        let normal_path = output_path.clone() + "_normal.png";
-        render_result.normal_pass.unwrap().write_png(&Path::new(&normal_path));
+        let normal_path = output_path.clone() + "_normal.hdr";
+        render_result.normal_pass.unwrap().write(&Path::new(&normal_path));
 
-        let denoise_path = output_path.clone() + "_denoise.png";
-        render_result.denoise_pass.unwrap().write_png(&Path::new(&denoise_path));
+        let denoise_path = output_path.clone() + "_denoise.hdr";
+        render_result.denoise_pass.unwrap().write(&Path::new(&denoise_path));
     }
 
     Ok(())
