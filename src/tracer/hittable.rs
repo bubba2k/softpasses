@@ -224,7 +224,8 @@ impl AABoundingBox {
                 return false;
             }
         }
-        return tmin > 0.0;
+
+        t_interval.contains(tmin)
     }
 
     pub fn dist(&self, ray: &Ray, t_interval: Interval) -> Option<Float> {
@@ -245,7 +246,11 @@ impl AABoundingBox {
             }
         }
 
-        if tmin > 0.0 { Some(tmin) } else { None }
+        if t_interval.contains(tmin) {
+            Some(tmin)
+        } else {
+            None
+        }
     }
 }
 
