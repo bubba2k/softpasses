@@ -453,10 +453,6 @@ impl BVHMesh {
             // Traverse the bvh
             let node = &self.nodes[to_discover.pop().unwrap()];
 
-            if !node.aabb.hit(ray, t_interval) {
-                continue;
-            }
-
             if node.num_prims > 0 {
                 // Node is a leaf, save it!
                 visited_leaf_nodes.push(node);
