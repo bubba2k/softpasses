@@ -4,6 +4,7 @@ use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
 use crate::tracer;
+use std::f32::NEG_INFINITY;
 use std::path::Path;
 
 pub struct HitRecord {
@@ -208,7 +209,7 @@ impl AABoundingBox {
 
     // Ray-box intersection using slabs method
     pub fn hit(&self, ray: &Ray, t_interval: Interval) -> bool {
-        let mut tmin = t_interval.min;
+        let mut tmin = f32::NEG_INFINITY;
         let mut tmax = t_interval.max;
 
         for i in 0..3 {
@@ -225,11 +226,11 @@ impl AABoundingBox {
             }
         }
 
-        t_interval.contains(tmin)
+        true
     }
 
     pub fn dist(&self, ray: &Ray, t_interval: Interval) -> Option<Float> {
-        let mut tmin = t_interval.min;
+        let mut tmin = NEG_INFINITY;
         let mut tmax = t_interval.max;
 
         for i in 0..3 {
@@ -246,10 +247,12 @@ impl AABoundingBox {
             }
         }
 
-        if t_interval.contains(tmin) {
-            Some(tmin)
+        if tmin >= 0.0 {
+            Some(tmin) // Entry point in front of ray origin
+        } else if tmax >= 0.0 {
+            Some(0.0) // Ray starts inside box, so "distance" is zero
         } else {
-            None
+            None // Intersection is behind ray origin
         }
     }
 }
