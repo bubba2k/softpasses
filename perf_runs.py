@@ -17,7 +17,7 @@ def perform_runs(num_runs, executable_path, branch_name):
         subprocess.run([executable_path], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         end = time.time()
         elapsed = end - start
-        print("{branch}: {i}/{n}: {elapsed}s")
+        print(f"{branch_name}: {run_idx}/{num_runs}: {elapsed:.4f}s")
         run_times.append(elapsed)
 
     avg_time = sum(run_times) / num_runs
