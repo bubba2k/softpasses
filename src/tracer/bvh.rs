@@ -437,6 +437,72 @@ impl BVHMesh {
         }
     }
 
+    fn try_hit_it_ordered(&self, ray: &Ray, t_interval: Interval) -> Option<(u32, Float)> {
+        // Can abort right away if the root AABB is not hit.
+        if !self.nodes[0].aabb.hit(ray, t_interval) {
+            return None;
+        }
+
+        // Keep track of the nodes to discover here (DFS)
+        let mut to_discover = Vec::<usize>::new();
+
+        // Start at root node
+        to_discover.push(0);
+        while to_discover.len() != 0 {
+            // Traverse the bvh
+            let node = &self.nodes[to_discover.pop().unwrap()];
+
+            if node.num_prims > 0 {
+                // Determine the closest primitve hit inside this leaf node.
+                // Since we are doing an ordered traverse (from nodes closest to furthest to camera),
+                // we know that we have definitely found the closest hit, if there is one.
+                if let Some(closest_hit) = ((node.first as usize)
+                    ..((node.first + node.num_prims) as usize))
+                    .map(|idx| (idx as u32, &self.triangles[idx]))
+                    .map(|(idx, tri)| {
+                        if let Some(t_hit) = tri.ray_intersection(ray, &t_interval) {
+                            Some((idx, t_hit))
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
+                {
+                    return Some(closest_hit);
+                }
+            } else {
+                // Node is interior, check whether we care about its children
+                // Remember: We want to go for the _closest_ nodes first, and we ignore all nodes whose
+                // AABB is not hit.
+                let (a, b) = (node.first as usize, (node.first + 1) as usize);
+                match (
+                    self.nodes[a].aabb.dist(ray, t_interval),
+                    self.nodes[b].aabb.dist(ray, t_interval),
+                ) {
+                    (None, None) => {}
+                    (None, Some(_dist_b)) => {
+                        to_discover.push(b);
+                    }
+                    (Some(_dist_a), None) => {
+                        to_discover.push(a);
+                    }
+                    (Some(dist_a), Some(dist_b)) => {
+                        if dist_a < dist_b {
+                            to_discover.push(b);
+                            to_discover.push(a);
+                        } else {
+                            to_discover.push(a);
+                            to_discover.push(b);
+                        }
+                    }
+                };
+            }
+        }
+
+        None
+    }
+
     fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> Option<(u32, Float)> {
         // Keep track of the nodes to discover here (DFS)
         let mut to_discover = Vec::<usize>::new();
@@ -542,7 +608,7 @@ impl HittableTrait for BVHMesh {
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
-        if let Some((tri_idx, t_hit)) = Self::try_hit_it(&self, ray, t_interval) {
+        if let Some((tri_idx, t_hit)) = Self::try_hit_it_ordered(&self, ray, t_interval) {
             let point_hit = ray.at(t_hit);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
