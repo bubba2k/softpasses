@@ -197,6 +197,30 @@ fn bvh_count_prims(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
     }
 }
 
+fn bvh_prims_min(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
+    if bvh_nodes[index].num_prims != 0 {
+        bvh_nodes[index].num_prims
+    } else {
+        // Traverse left and right children and sum
+        bvh_prims_min(bvh_nodes, bvh_nodes[index].first as usize).min(bvh_prims_min(
+            bvh_nodes,
+            (bvh_nodes[index].first + 1) as usize,
+        ))
+    }
+}
+
+fn bvh_prims_max(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
+    if bvh_nodes[index].num_prims != 0 {
+        bvh_nodes[index].num_prims
+    } else {
+        // Traverse left and right children and sum
+        bvh_prims_max(bvh_nodes, bvh_nodes[index].first as usize).max(bvh_prims_max(
+            bvh_nodes,
+            (bvh_nodes[index].first + 1) as usize,
+        ))
+    }
+}
+
 fn bvh_depth(bvh_nodes: &Vec<BVHNode>, index: usize, depth: u32) -> u32 {
     if bvh_nodes[index].num_prims != 0 {
         depth
@@ -302,12 +326,16 @@ fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
     let avg_imbalance = bvh_avg_imbalance(bvh_nodes);
     let min_imbalance = bvh_min_imbalance(bvh_nodes, 0);
     let max_imbalance = bvh_max_imbalance(bvh_nodes, 0);
+    let min_leaf_prims = bvh_prims_min(bvh_nodes, 0);
+    let max_leaf_prims = bvh_prims_max(bvh_nodes, 0);
 
     eprintln!(
-        "Num nodes: {}\nNum prims: {}\nNum leafs: {}\nAvg prims per leaf: {:.3}\nDepth: {}\nShallowness {}",
+        "Num nodes: {}\nNum prims: {}\nNum leafs: {}\nMin prims: {}\nMax prims: {}\n: {:.3}\nDepth: {}\nShallowness {}",
         num_nodes,
         num_primitives,
         num_leaves,
+        min_leaf_prims,
+        max_leaf_prims,
         (num_primitives as f32) / (num_leaves as f32),
         depth,
         shallowness
