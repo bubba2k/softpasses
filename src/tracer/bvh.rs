@@ -437,6 +437,55 @@ impl BVHMesh {
         }
     }
 
+    fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> Option<(u32, Float)> {
+        // Keep track of the nodes to discover here (DFS)
+        let mut to_discover = Vec::<usize>::new();
+        // Save the leaf nodes containing the primitives we have to check later here
+        let mut visited_leaf_nodes = Vec::<&BVHNode>::new();
+        // TODO: Reserve some space for the two Vecs above.
+
+        // First traverse all the relevant nodes and store the indices of the visited leaf nodes.
+        // Once node discovery is done, we check the actual primitives.
+
+        // Start at root node
+        to_discover.push(0);
+        while to_discover.len() != 0 {
+            // Traverse the bvh
+            let node = &self.nodes[to_discover.pop().unwrap()];
+
+            if !node.aabb.hit(ray, t_interval) {
+                continue;
+            }
+
+            if node.num_prims > 0 {
+                // Node is a leaf, save it!
+                visited_leaf_nodes.push(node);
+            } else {
+                // Node is interior, discover its children
+                to_discover.push((node.first + 1) as usize);
+                to_discover.push(node.first as usize);
+            }
+        }
+
+        // Node discovery done, now check all the primitives and find the closest hit.
+        let closest_hit = visited_leaf_nodes
+            .iter()
+            .map(|node| (node.first as usize)..(node.first as usize + node.num_prims as usize))
+            .map(|idcs| idcs.map(|idx| (idx as u32, &self.triangles[idx])))
+            .flatten()
+            .map(|(idx, tri)| {
+                if let Some(t_hit) = tri.ray_intersection(ray, &t_interval) {
+                    Some((idx, t_hit))
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .min_by(|a, b| a.1.total_cmp(&b.1));
+
+        closest_hit
+    }
+
     fn try_hit_rec(&self, ray: &Ray, t_interval: Interval, bvh_idx: u32) -> Option<(u32, Float)> {
         // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];
@@ -493,7 +542,7 @@ impl HittableTrait for BVHMesh {
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
-        if let Some((tri_idx, t_hit)) = Self::try_hit_rec(&self, ray, t_interval, 0) {
+        if let Some((tri_idx, t_hit)) = Self::try_hit_it(&self, ray, t_interval) {
             let point_hit = ray.at(t_hit);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
