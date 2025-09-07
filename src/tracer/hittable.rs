@@ -224,7 +224,7 @@ impl AABoundingBox {
                 return false;
             }
         }
-        true
+        return tmin > 0.0;
     }
 }
 
