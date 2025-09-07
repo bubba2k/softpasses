@@ -4,7 +4,6 @@ use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
 use crate::tracer;
-use std::f32::NEG_INFINITY;
 use std::path::Path;
 
 pub struct HitRecord {
