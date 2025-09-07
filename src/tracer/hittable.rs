@@ -209,7 +209,7 @@ impl AABoundingBox {
 
     // Ray-box intersection using slabs method
     pub fn hit(&self, ray: &Ray, t_interval: Interval) -> bool {
-        let mut tmin = f32::NEG_INFINITY;
+        let mut tmin = t_interval.min;
         let mut tmax = t_interval.max;
 
         for i in 0..3 {
@@ -230,7 +230,7 @@ impl AABoundingBox {
     }
 
     pub fn dist(&self, ray: &Ray, t_interval: Interval) -> Option<Float> {
-        let mut tmin = NEG_INFINITY;
+        let mut tmin = t_interval.min;
         let mut tmax = t_interval.max;
 
         for i in 0..3 {
@@ -247,13 +247,7 @@ impl AABoundingBox {
             }
         }
 
-        if tmin >= 0.0 {
-            Some(tmin) // Entry point in front of ray origin
-        } else if tmax >= 0.0 {
-            Some(0.0) // Ray starts inside box, so "distance" is zero
-        } else {
-            None // Intersection is behind ray origin
-        }
+        Some(tmin)
     }
 }
 
