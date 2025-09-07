@@ -226,6 +226,27 @@ impl AABoundingBox {
         }
         return tmin > 0.0;
     }
+
+    pub fn dist(&self, ray: &Ray, t_interval: Interval) -> Option<Float> {
+        let mut tmin = t_interval.min;
+        let mut tmax = t_interval.max;
+
+        for i in 0..3 {
+            let inv_d = ray.inv_dir[i];
+            let mut t0 = (self.min[i] - ray.orig[i]) * inv_d;
+            let mut t1 = (self.max[i] - ray.orig[i]) * inv_d;
+            if inv_d < 0.0 {
+                std::mem::swap(&mut t0, &mut t1);
+            }
+            tmin = tmin.max(t0);
+            tmax = tmax.min(t1);
+            if tmax <= tmin {
+                return None;
+            }
+        }
+
+        if tmin > 0.0 { Some(tmin) } else { None }
+    }
 }
 
 #[derive(Default, Clone)]
