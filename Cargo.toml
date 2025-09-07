@@ -3,9 +3,6 @@ name = "weekend_of_rays"
 version = "0.1.0"
 edition = "2024"
 
-[profile.release]
-debug = true
-
 [dependencies]
 chrono = "0.4.41"
 fastrand = "2.3.0"
