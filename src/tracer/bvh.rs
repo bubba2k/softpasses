@@ -437,13 +437,7 @@ impl BVHMesh {
         }
     }
 
-    fn try_hit_rec(
-        &self,
-        ray: &Ray,
-        t_interval: Interval,
-        num_bounces: u32,
-        bvh_idx: u32,
-    ) -> Option<(u32, Float)> {
+    fn try_hit_rec(&self, ray: &Ray, t_interval: Interval, bvh_idx: u32) -> Option<(u32, Float)> {
         // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];
 
@@ -469,8 +463,8 @@ impl BVHMesh {
             let right_idx = node.first + 1;
 
             match (
-                Self::try_hit_rec(&self, ray, t_interval, num_bounces, left_idx),
-                Self::try_hit_rec(&self, ray, t_interval, num_bounces, right_idx),
+                Self::try_hit_rec(&self, ray, t_interval, left_idx),
+                Self::try_hit_rec(&self, ray, t_interval, right_idx),
             ) {
                 (Some(res1), Some(res2)) => {
                     if res1.1 < res2.1 {
@@ -499,7 +493,7 @@ impl HittableTrait for BVHMesh {
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
-        if let Some((tri_idx, t_hit)) = Self::try_hit_rec(&self, ray, t_interval, num_bounces, 0) {
+        if let Some((tri_idx, t_hit)) = Self::try_hit_rec(&self, ray, t_interval, 0) {
             let point_hit = ray.at(t_hit);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
