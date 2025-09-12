@@ -1,4 +1,4 @@
-use super::hittable::{AABoundingBox, HitRecord, Hittable, HittableTrait, Triangle};
+use super::hittable::{AABoundingBox, HitRecord, Hittable, HittableTrait, RayInfo, Triangle};
 use crate::Material;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
@@ -368,8 +368,8 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
             .sum()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
-        self.try_hit_rec(ray, t_interval, num_bounces, 0)
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+        self.try_hit_rec(ray, t_interval, ray_info, 0)
     }
 }
 
@@ -389,7 +389,7 @@ impl<T: HittableTrait> BVH<T> {
         &self,
         ray: &Ray,
         t_interval: Interval,
-        num_bounces: u32,
+        ray_info: &RayInfo,
         bvh_idx: u32,
     ) -> Option<HitRecord> {
         // Traverse the bvh
@@ -399,7 +399,7 @@ impl<T: HittableTrait> BVH<T> {
         if node.num_prims != 0 {
             let range = (node.first as usize)..(node.first as usize + node.num_prims as usize);
             return range
-                .map(|idx| self.hittables[idx].try_hit(ray, t_interval, num_bounces))
+                .map(|idx| self.hittables[idx].try_hit(ray, t_interval, ray_info))
                 .flatten()
                 .min_by(|a, b| a.t.total_cmp(&b.t));
         }
@@ -410,7 +410,7 @@ impl<T: HittableTrait> BVH<T> {
 
             [left_idx, right_idx]
                 .iter()
-                .flat_map(|idx| self.try_hit_rec(ray, t_interval, num_bounces, *idx))
+                .flat_map(|idx| self.try_hit_rec(ray, t_interval, ray_info, *idx))
                 .min_by(|a, b| a.t.total_cmp(&b.t))
         } else {
             None
@@ -635,7 +635,7 @@ impl HittableTrait for BVHMesh {
         self.nodes[0].aabb.clone()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         if let Some((tri_idx, t_hit)) = Self::try_hit_it_ordered(&self, ray, t_interval) {
             let point_hit = ray.at(t_hit);
 
@@ -665,9 +665,10 @@ impl HittableTrait for BVHMesh {
                 &ray.step(0.01),
                 t_hit,
                 point_hit,
-                num_bounces,
+                ray_info.num_bounces,
                 &self.material,
                 obj_normal,
+                ray_info.num_aabb_intersects,
             ))
         } else {
             None
