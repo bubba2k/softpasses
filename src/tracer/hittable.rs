@@ -6,6 +6,11 @@ use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plan
 use crate::tracer;
 use std::path::Path;
 
+pub struct RayInfo {
+    pub num_aabb_intersects: u32,
+    pub num_bounces: u32,
+}
+
 pub struct HitRecord {
     pub point: Vec3f,
     pub normal: Vec3f,
@@ -13,6 +18,7 @@ pub struct HitRecord {
     pub material: Material,
     pub t: Float,
     pub front_face: bool, // True if ray hit the front of a face/surface. False if ray is on inside
+    pub num_aabb_intersects: u32, // For BVH debugging
 }
 
 impl<'a> HitRecord {
@@ -23,6 +29,7 @@ impl<'a> HitRecord {
         num_bounces: u32,
         obj_mat: &'a Material,
         obj_normal: Vec3f,
+        num_aabb_intersects: u32,
     ) -> Self {
         // Check whether we hit the inside or outside
         if ray.dir.dot(obj_normal) > 0.0 {
@@ -34,6 +41,7 @@ impl<'a> HitRecord {
                 num_bounces,
                 t: t_hit,
                 front_face: false,
+                num_aabb_intersects: num_aabb_intersects,
             }
         } else {
             // Ray hit the face
@@ -44,6 +52,7 @@ impl<'a> HitRecord {
                 num_bounces: num_bounces,
                 t: t_hit,
                 front_face: true,
+                num_aabb_intersects: num_aabb_intersects,
             }
         }
     }
@@ -52,7 +61,7 @@ impl<'a> HitRecord {
 pub trait HittableTrait {
     // The meat and bones. Detect hits from rays.
     // num_bounces: How many time this ray has bounced already.
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord>;
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord>;
 
     fn get_aabb(&self) -> AABoundingBox;
 
@@ -147,18 +156,18 @@ impl HittableTrait for Hittable {
         }
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         match self {
-            Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval, num_bounces),
+            Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval, ray_info),
             Hittable::Parallelepiped(parallelepiped) => {
-                parallelepiped.try_hit(ray, t_interval, num_bounces)
+                parallelepiped.try_hit(ray, t_interval, ray_info)
             }
             Hittable::Parallelogram(parallelogram) => {
-                parallelogram.try_hit(ray, t_interval, num_bounces)
+                parallelogram.try_hit(ray, t_interval, ray_info)
             }
-            Hittable::Plane(plane) => plane.try_hit(ray, t_interval, num_bounces),
-            Hittable::Mesh(mesh) => mesh.try_hit(ray, t_interval, num_bounces),
-            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.try_hit(ray, t_interval, num_bounces),
+            Hittable::Plane(plane) => plane.try_hit(ray, t_interval, ray_info),
+            Hittable::Mesh(mesh) => mesh.try_hit(ray, t_interval, ray_info),
+            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.try_hit(ray, t_interval, ray_info),
         }
     }
 }
@@ -269,7 +278,7 @@ impl HittableList {
 }
 
 impl HittableTrait for HittableList {
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Abort if the ray does not hit this lists bounding box (TODO: This seems to worsen performance,
         // so it is turned off for now.)
         // if !self.aabb.hit(ray, t_interval)  { return None; }
@@ -278,7 +287,7 @@ impl HittableTrait for HittableList {
         // smallest t.
         self.list
             .iter()
-            .map(|x| x.try_hit(ray, t_interval, num_bounces))
+            .map(|x| x.try_hit(ray, t_interval, ray_info))
             .flatten()
             .min_by(|x, y| x.t.total_cmp(&y.t))
     }
@@ -321,7 +330,7 @@ impl Transformable for Sphere {
 }
 
 impl HittableTrait for Sphere {
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
             if t_interval.contains(t_hit) {
                 let point_hit = ray.at(t_hit);
@@ -331,9 +340,10 @@ impl HittableTrait for Sphere {
                     ray,
                     t_hit,
                     point_hit,
-                    num_bounces,
+                    ray_info.num_bounces,
                     &self.material,
                     sphere_normal,
+                    ray_info.num_aabb_intersects,
                 ))
             } else {
                 None
@@ -406,7 +416,7 @@ impl Transformable for Plane {
 }
 
 impl HittableTrait for Plane {
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -423,9 +433,10 @@ impl HittableTrait for Plane {
                 ray,
                 t_intersect,
                 p_intersect,
-                num_bounces,
+                ray_info.num_bounces,
                 &self.material,
                 self.normal,
+                ray_info.num_aabb_intersects,
             ))
         }
     }
@@ -590,7 +601,7 @@ impl HittableTrait for Parallelogram {
     // 1. Finding intersect point between ray and the plane the rect lies on
     // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
     //    then perform a 2D Point-Contains-Polygon Check
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -627,9 +638,10 @@ impl HittableTrait for Parallelogram {
                     ray,
                     t_intersect,
                     p_intersect,
-                    num_bounces,
+                    ray_info.num_bounces,
                     &self.material,
                     self.normal,
+                    ray_info.num_aabb_intersects,
                 ))
             } else {
                 None
@@ -683,8 +695,8 @@ impl HittableTrait for Parallelepiped {
         self.list.get_aabb()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
-        self.list.try_hit(ray, t_interval, num_bounces)
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+        self.list.try_hit(ray, t_interval, ray_info)
     }
 
     fn centroid(&self) -> Vec3f {
@@ -823,7 +835,7 @@ impl HittableTrait for Triangle {
         1
     }
 
-    fn try_hit(&self, _ray: &Ray, _t_interval: Interval, _num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, _ray: &Ray, _t_interval: Interval, _ray_info: &RayInfo) -> Option<HitRecord> {
         // Since the triangles are used only inside BVHMesh, this should never be used.
         todo!()
     }
@@ -1006,7 +1018,7 @@ impl HittableTrait for Mesh {
         (self.aabb.max - self.aabb.min) * 0.5 + self.aabb.min
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, num_bounces: u32) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Do a simple aabb check
         if !self.aabb.hit(ray, t_interval) {
             return None;
@@ -1057,9 +1069,10 @@ impl HittableTrait for Mesh {
                     ray,
                     t_hit,
                     point_hit,
-                    num_bounces,
+                    ray_info.num_bounces,
                     &self.material,
                     obj_normal,
+                    ray_info.num_aabb_intersects,
                 ))
             } else {
                 None

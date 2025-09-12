@@ -6,28 +6,39 @@ use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float, Pixel};
 use crate::tracer::camera::Camera;
-use crate::tracer::hittable::HittableTrait;
+use crate::tracer::hittable::{HittableTrait, RayInfo};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
 
-fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -> Color {
+fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, ray_info: &RayInfo) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Abort if max bounce is reached.
-    if bounce == settings.max_bounces {
+    if ray_info.num_bounces == settings.max_bounces {
         return COLOR_BLACK;
     }
     // Fire the ray. See if it hits anything.
-    if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, bounce) {
+    if let Some(hit) = world
+        .objects_bvh
+        .try_hit(ray, settings.ray_limits, ray_info)
+    {
         match hit.material.scatter(ray, &hit) {
             (Some(scatter_ray), Some(color_att)) => {
                 // Fire the reflected/scattered ray we got from the material and surface information.
                 // Attenuate with the color attenuation applied by the material.
-                trace_ray(&scatter_ray, settings, world, bounce + 1) * color_att
+                let new_ray_info = RayInfo {
+                    num_bounces: ray_info.num_bounces + 1,
+                    ..*ray_info
+                };
+                trace_ray(&scatter_ray, settings, world, &new_ray_info) * color_att
             }
             (Some(scatter_ray), None) => {
                 // The ray was reflected, but the color not attenuated.
                 // Must be a perfect mirror or a portal or sum
-                trace_ray(&scatter_ray, settings, world, bounce + 1)
+                let new_ray_info = RayInfo {
+                    num_bounces: ray_info.num_bounces + 1,
+                    ..*ray_info
+                };
+                trace_ray(&scatter_ray, settings, world, &new_ray_info)
             }
             (None, Some(color_att)) => {
                 // Ray absorbed, just return the attenuation color.
@@ -46,11 +57,19 @@ fn trace_ray(ray: &Ray, settings: &RenderSettings, world: &World, bounce: u32) -
 
 // Return the albedo of the first object/material hit
 // TODO: Instead return albedo of the first non-transmission hit
-fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
+fn trace_ray_albedo(
+    ray: &Ray,
+    settings: &RenderSettings,
+    world: &World,
+    ray_info: &RayInfo,
+) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Abort if max bounce is reached.
     // Fire the ray. See if it hits anything.
-    if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
+    if let Some(hit) = world
+        .objects_bvh
+        .try_hit(ray, settings.ray_limits, ray_info)
+    {
         match hit.material.scatter(ray, &hit) {
             (_, Some(color)) => color,
             (_, None) => COLOR_BLACK,
@@ -63,11 +82,19 @@ fn trace_ray_albedo(ray: &Ray, settings: &RenderSettings, world: &World, _bounce
 
 // Return the normal of the first object/material hit
 // TODO: Instead return normal of the first non-transmission hit
-fn trace_ray_normal(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
+fn trace_ray_normal(
+    ray: &Ray,
+    settings: &RenderSettings,
+    world: &World,
+    ray_info: &RayInfo,
+) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Abort if max bounce is reached.
     // Fire the ray. See if it hits anything.
-    if let Some(hit) = world.objects_bvh.try_hit(ray, settings.ray_limits, 0) {
+    if let Some(hit) = world
+        .objects_bvh
+        .try_hit(ray, settings.ray_limits, ray_info)
+    {
         if hit.front_face {
             hit.normal
         } else {
@@ -80,21 +107,20 @@ fn trace_ray_normal(ray: &Ray, settings: &RenderSettings, world: &World, _bounce
     }
 }
 
-fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, _bounce: u32) -> Color {
+fn trace_ray_it(ray: &Ray, settings: &RenderSettings, world: &World, ray_info: &RayInfo) -> Color {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
     let mut current_ray: Ray = ray.clone();
-    let mut bounce_counter = 0;
+    let mut bounce_counter = ray_info.num_bounces;
     loop {
         if bounce_counter == settings.max_bounces {
             // If max bounces where reached, the ray never hit a light source
             return COLOR_BLACK;
         }
         // Fire the ray. See if it hits anything.
-        if let Some(hit) =
-            world
-                .objects_bvh
-                .try_hit(&current_ray, settings.ray_limits, bounce_counter)
+        if let Some(hit) = world
+            .objects_bvh
+            .try_hit(&current_ray, settings.ray_limits, ray_info)
         {
             match hit.material.scatter(&current_ray, &hit) {
                 (Some(scatter_ray), Some(color_att)) => {
@@ -130,7 +156,7 @@ fn trace_ray_multipass(
     ray: &Ray,
     settings: &RenderSettings,
     world: &World,
-    _bounce: u32,
+    ray_info: &RayInfo,
 ) -> (Color, Color, Color) {
     static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
     // Initialize ray_color to the multiplicative neutral element.
@@ -149,10 +175,9 @@ fn trace_ray_multipass(
             return (COLOR_BLACK, ray_albedo, ray_normal);
         }
         // Fire the ray. See if it hits anything.
-        if let Some(hit) =
-            world
-                .objects_bvh
-                .try_hit(&current_ray, settings.ray_limits, bounce_counter)
+        if let Some(hit) = world
+            .objects_bvh
+            .try_hit(&current_ray, settings.ray_limits, ray_info)
         {
             // The albedo and normal are computed exactly ONCE on the very first bounce.
             if bounce_counter == 0 {
@@ -279,8 +304,13 @@ pub fn render_region_multipass(
                     .viewport
                     .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
+                let ray_info = RayInfo {
+                    num_aabb_intersects: 0,
+                    num_bounces: 0,
+                };
+
                 let (new_color, new_albedo, new_normal) =
-                    trace_ray_multipass(&ray, &settings, &world, 0);
+                    trace_ray_multipass(&ray, &settings, &world, &ray_info);
 
                 color += new_color * (1.0 / settings.samples_per_pixel as Float);
                 albedo += new_albedo * (1.0 / settings.samples_per_pixel as Float);
