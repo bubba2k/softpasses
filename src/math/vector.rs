@@ -1,3 +1,5 @@
+use glam::DVec3;
+
 // Set some type aliases here...
 // We do this so we can easily switch between Double and Float,
 // and glams handy Vec_A types aligned for SSE2
@@ -11,6 +13,10 @@ pub type Pixel = glam::U8Vec3;
 pub const PLANE_XY: Vec3f = Vec3f::new(0.0, 0.0, 1.0);
 pub const PLANE_XZ: Vec3f = Vec3f::new(0.0, 1.0, 0.0);
 pub const PLANE_YZ: Vec3f = Vec3f::new(1.0, 0.0, 0.0);
+
+pub fn vec3_from_dvec3(vec: glam::DVec3) -> glam::Vec3 {
+    vec3(vec.x as f32, vec.y as f32, vec.z as f32)
+}
 
 pub fn vec3(x: Float, y: Float, z: Float) -> Vec3f {
     Vec3f::new(x, y, z)
