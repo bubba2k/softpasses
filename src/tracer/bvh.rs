@@ -425,6 +425,14 @@ pub struct BVHMesh {
     material: Material,
 }
 
+pub struct BVHQueryResult {
+    pub primitive_index: u32,
+    pub hit_t: Float,
+    pub num_aabb_checks: u32,
+    pub num_aabb_hits: u32,
+    pub num_primitve_checks: u32,
+}
+
 impl Transformable for BVHMesh {
     fn apply_transform(self, transform: &Transform) -> Self {
         // 1. Apply transform to vertex positions and normals
@@ -465,7 +473,7 @@ impl BVHMesh {
         }
     }
 
-    fn try_hit_it_ordered(&self, ray: &Ray, t_interval: Interval) -> Option<(u32, Float)> {
+    fn try_hit_it_ordered(&self, ray: &Ray, t_interval: Interval) -> Option<BVHQueryResult> {
         // Can abort right away if the root AABB is not hit.
         if !self.nodes[0].aabb.hit(ray, t_interval) {
             return None;
@@ -473,6 +481,10 @@ impl BVHMesh {
 
         // Keep track of the nodes to discover here (DFS)
         let mut to_discover = Vec::<usize>::new();
+
+        let mut num_aabb_intersects = 0;
+        let mut num_aabb_checks = 0;
+        let mut num_primitive_checks = 0;
 
         // Start at root node
         to_discover.push(0);
@@ -484,6 +496,7 @@ impl BVHMesh {
                 // Determine the closest primitve hit inside this leaf node.
                 // Since we are doing an ordered traverse (from nodes closest to furthest to camera),
                 // we know that we have definitely found the closest hit, if there is one.
+                num_primitive_checks += node.num_prims;
                 if let Some(closest_hit) = ((node.first as usize)
                     ..((node.first + node.num_prims) as usize))
                     .map(|idx| (idx as u32, &self.triangles[idx]))
@@ -497,13 +510,20 @@ impl BVHMesh {
                     .flatten()
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                 {
-                    return Some(closest_hit);
+                    return Some(BVHQueryResult {
+                        primitive_index: closest_hit.0,
+                        hit_t: closest_hit.1,
+                        num_aabb_checks: num_aabb_checks,
+                        num_aabb_hits: num_aabb_intersects,
+                        num_primitve_checks: num_primitive_checks,
+                    });
                 }
             } else {
                 // Node is interior, check whether we care about its children
                 // Remember: We want to go for the _closest_ nodes first, and we ignore all nodes whose
                 // AABB is not hit.
                 let (a, b) = (node.first as usize, (node.first + 1) as usize);
+                num_aabb_checks += 2;
                 match (
                     self.nodes[a].aabb.dist(ray, t_interval),
                     self.nodes[b].aabb.dist(ray, t_interval),
@@ -511,11 +531,15 @@ impl BVHMesh {
                     (None, None) => {}
                     (None, Some(_dist_b)) => {
                         to_discover.push(b);
+                        num_aabb_intersects += 1;
                     }
                     (Some(_dist_a), None) => {
                         to_discover.push(a);
+                        num_aabb_intersects += 1;
                     }
                     (Some(dist_a), Some(dist_b)) => {
+                        num_aabb_intersects += 2;
+
                         if dist_a < dist_b {
                             to_discover.push(b);
                             to_discover.push(a);
@@ -636,14 +660,21 @@ impl HittableTrait for BVHMesh {
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
-        if let Some((tri_idx, t_hit)) = Self::try_hit_it_ordered(&self, ray, t_interval) {
+        if let Some(BVHQueryResult {
+            primitive_index,
+            hit_t: t_hit,
+            num_aabb_checks,
+            num_aabb_hits,
+            num_primitve_checks,
+        }) = Self::try_hit_it_ordered(&self, ray, t_interval)
+        {
             let point_hit = ray.at(t_hit);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
             // coordinates, u, v, w.
-            let a = self.triangles[tri_idx as usize].positions[0];
-            let b = self.triangles[tri_idx as usize].positions[1];
-            let c = self.triangles[tri_idx as usize].positions[2];
+            let a = self.triangles[primitive_index as usize].positions[0];
+            let b = self.triangles[primitive_index as usize].positions[1];
+            let c = self.triangles[primitive_index as usize].positions[2];
             let v0 = b - a;
             let v1 = c - a;
             let v2 = point_hit - a;
@@ -657,9 +688,9 @@ impl HittableTrait for BVHMesh {
             let w = (d00 * d21 - d01 * d20) / denom;
             let u = 1.0 - v - w;
             // Now interpolate between the three corners.
-            let obj_normal = (self.triangles[tri_idx as usize].normals[0] * u
-                + self.triangles[tri_idx as usize].normals[1] * v
-                + self.triangles[tri_idx as usize].normals[2] * w)
+            let obj_normal = (self.triangles[primitive_index as usize].normals[0] * u
+                + self.triangles[primitive_index as usize].normals[1] * v
+                + self.triangles[primitive_index as usize].normals[2] * w)
                 .normalize();
             Some(HitRecord::new(
                 &ray.step(0.01),
@@ -668,7 +699,7 @@ impl HittableTrait for BVHMesh {
                 ray_info.num_bounces,
                 &self.material,
                 obj_normal,
-                ray_info.num_aabb_intersects,
+                num_aabb_hits,
             ))
         } else {
             None
