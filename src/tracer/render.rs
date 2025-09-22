@@ -28,6 +28,8 @@ trait RenderPass<const N: usize> {
         world: &World,
         ray_info: &RayInfo,
     );
+
+    fn clear(&mut self);
 }
 
 struct CombinedPass {
@@ -49,6 +51,13 @@ impl RenderPass<3> for CombinedPass {
             self.sums[i] += DVec3::from(sample[i]);
         }
         self.num_samples += 1;
+    }
+
+    fn clear(&mut self) {
+        for sum in self.sums.iter_mut() {
+            *sum = glam::dvec3(0.0, 0.0, 0.0)
+        }
+        self.num_samples = 0;
     }
 
     fn yield_estimate(&self) -> [Color; 3] {
@@ -396,6 +405,57 @@ pub fn render_region(
         }
     }
     colors
+}
+
+// Render a specific region of the image.
+pub fn render_region_with_pass<const N: usize, RP: RenderPass<N> + Default>(
+    cam: &Camera,
+    settings: &RenderSettings,
+    world: &World,
+    region: util::ImageRegion,
+) -> [Vec<Color>; N] {
+    let mut renderpass: RP = RP::default();
+    let pixel_count = ((region.x.1 - region.x.0) * (region.y.1 - region.y.0)) as usize;
+    let mut result: [Vec<Color>; N] = std::array::from_fn(|_| Vec::with_capacity(pixel_count));
+    let offset_range = 1.0 / settings.image_height as Float;
+
+    for y in region.y.0..region.y.1 {
+        for x in region.x.0..region.x.1 {
+            let u = x as Float / settings.image_width as Float;
+            let v = y as Float / settings.image_height as Float;
+            renderpass.clear();
+            // Perform multisampling here.
+            for _ in 0..settings.samples_per_pixel {
+                // The random offset into the pixel square we are considering atm (for multisampling)
+                // TODO: Make this discy instead
+                let rnd_offset_x = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
+                let rnd_offset_y = util::rand_range_f(0.0, offset_range) - 0.5 * offset_range;
+                // Random ray origin offset (for DOF simulation)
+                // TODO: Make it so the DOF parameter describes the *actual* depth of field
+                let blur_offset =
+                    util::rand_vec_on_unit_disc() * cam.lens.dof / cam.lens.focal_distance;
+                let ray_origin = cam.pose.position
+                    + cam.viewport.viewdown * blur_offset.y
+                    + cam.viewport.viewright * blur_offset.x;
+                let ray = cam
+                    .viewport
+                    .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
+
+                let ray_info = RayInfo {
+                    num_aabb_intersects: 0,
+                    num_bounces: 0,
+                };
+
+                renderpass.accumulate_sample(&ray, &settings, &world, &ray_info);
+            }
+            renderpass
+                .yield_estimate()
+                .iter()
+                .enumerate()
+                .for_each(|pass| result[pass.0].push(*pass.1));
+        }
+    }
+    result
 }
 
 // Render a specific region of the image.
