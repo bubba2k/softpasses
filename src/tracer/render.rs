@@ -12,6 +12,7 @@ use crate::tracer::camera::Camera;
 use crate::tracer::hittable::{HittableTrait, RayInfo};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
+use std::collections::HashMap;
 
 pub trait RenderPass<const N: usize> {
     fn trace_sample(
@@ -31,26 +32,32 @@ pub trait RenderPass<const N: usize> {
         ray_info: &RayInfo,
     );
 
+    fn pass_names(i: usize) -> String;
+
     fn clear(&mut self);
 }
 
-struct CombinedPass {
+pub struct DebugPass {
     // Accumulate in double precision
     sums: [glam::DVec3; 3],
     num_accumulated_samples: u32,
 }
 
-impl Default for CombinedPass {
+impl Default for DebugPass {
     fn default() -> Self {
         let sums = array::from_fn(|_| glam::dvec3(0.0, 0.0, 0.0));
-        CombinedPass {
+        DebugPass {
             sums,
             num_accumulated_samples: 0,
         }
     }
 }
 
-impl RenderPass<3> for CombinedPass {
+impl RenderPass<3> for DebugPass {
+    fn pass_names(i: usize) -> String {
+        String::from(["color", "albedo", "normal"][i])
+    }
+
     fn accumulate_sample(
         &mut self,
         ray: &Ray,
@@ -230,11 +237,8 @@ pub struct RenderSettings {
 }
 
 pub struct RenderResult {
-    pub color_pass: Option<Texture>,
-    pub albedo_pass: Option<Texture>,
-    pub normal_pass: Option<Texture>,
+    pub passes: HashMap<String, Texture>,
     pub time_elapsed: Float,
-
     pub image_height: u32,
     pub image_width: u32,
     pub num_samples: u32,
@@ -270,17 +274,11 @@ impl RenderResult {
             return Err(format!("Failed to create directory {:?}: {}", base_dir, e));
         }
 
-        for pass in [
-            (&self.albedo_pass, "albedo_pass"),
-            (&self.color_pass, "color_pass"),
-            (&self.normal_pass, "normal_pass"),
-        ] {
-            if let (Some(pass_texture), name) = pass {
-                let file_name = String::from(name) + file_extension;
-                let mut full_path = std::path::PathBuf::from(base_dir);
-                full_path.push(file_name);
-                pass_texture.write_32f(full_path.as_path())?;
-            }
+        for (name, pass_texture) in self.passes.iter() {
+            let file_name = String::from(name) + file_extension;
+            let mut full_path = std::path::PathBuf::from(base_dir);
+            full_path.push(file_name);
+            pass_texture.write_32f(full_path.as_path())?;
         }
 
         Ok(())
@@ -295,7 +293,12 @@ pub trait Scheduler {
         world: &World,
     ) -> [Vec<Color>; N];
 
-    fn estimate_render_time(&self, camera: &Camera, world: &World, settings: &RenderSettings) {
+    fn estimate_render_time<RP: RenderPass<N> + Default, const N: usize>(
+        &self,
+        camera: &Camera,
+        world: &World,
+        settings: &RenderSettings,
+    ) {
         // Attempt to get a somewhat accurate estimate of the total render time here.
         // Render the entire image once at 1 spp, then extrapolate the full render time from that.
         let estimate_settings = RenderSettings {
@@ -303,7 +306,7 @@ pub trait Scheduler {
             ..*settings
         };
         let estimate_start = std::time::Instant::now();
-        self.render_with_pass::<CombinedPass, _>(camera, estimate_settings, world);
+        self.render_with_pass::<RP, _>(camera, estimate_settings, world);
 
         // This should give a rough estimation.
         let elapsed = estimate_start.elapsed().as_secs_f64() as f64;
@@ -324,39 +327,37 @@ pub trait Scheduler {
         );
     }
 
-    fn render(&self, camera: Camera, settings: RenderSettings, world: &World) -> RenderResult {
+    fn render<RP: RenderPass<N> + Default, const N: usize>(
+        &self,
+        camera: Camera,
+        settings: RenderSettings,
+        world: &World,
+    ) -> RenderResult {
         // Rougly estimate render time here
-        self.estimate_render_time(&camera, world, &settings);
+        self.estimate_render_time::<RP, N>(&camera, world, &settings);
 
         let begin = std::time::Instant::now();
 
         // Compute the passes
-        let (color_pass, albedo_pass, normal_pass) = {
-            let [color_pass, albedo_pass, normal_pass] =
-                self.render_with_pass::<CombinedPass, _>(&camera, settings.clone(), world);
-            (
-                Some(Texture::from_raw(
+        let passes: [Vec<Color>; _] =
+            self.render_with_pass::<DebugPass, _>(&camera, settings.clone(), world);
+
+        // Make the hashmap
+        let mut passes_map: HashMap<String, Texture> = HashMap::default();
+        for i in 0..N {
+            passes_map.insert(
+                RP::pass_names(i),
+                Texture::from_raw(
                     settings.image_width as usize,
                     settings.image_height as usize,
-                    color_pass.clone(),
-                )),
-                Some(Texture::from_raw(
-                    settings.image_width as usize,
-                    settings.image_height as usize,
-                    albedo_pass.clone(),
-                )),
-                Some(Texture::from_raw(
-                    settings.image_width as usize,
-                    settings.image_height as usize,
-                    normal_pass.clone(),
-                )),
-            )
-        };
+                    // TODO: Might be nice to explicitely remove this clone at some point
+                    passes[i].clone(),
+                ),
+            );
+        }
 
         RenderResult {
-            color_pass: color_pass,
-            albedo_pass: albedo_pass,
-            normal_pass: normal_pass,
+            passes: passes_map,
             time_elapsed: begin.elapsed().as_secs_f64() as Float,
             image_height: settings.image_height,
             image_width: settings.image_width,

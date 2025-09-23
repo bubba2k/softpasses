@@ -8,7 +8,7 @@ pub struct PostProcessSettings {
 
 pub struct PostProcessResult {
     denoised_image: Option<Texture>,
-    beauty_image: Texture,
+    beauty_image: Option<Texture>,
 }
 
 impl PostProcessResult {
@@ -16,7 +16,7 @@ impl PostProcessResult {
         for pass in [
             (&self.denoised_image, "denoised"),
             // TODO: Remove this clone call
-            (&Some(self.beauty_image.clone()), "beauty"),
+            (&self.beauty_image.clone(), "beauty"),
         ] {
             if let (Some(pass_texture), name) = pass {
                 let file_name = String::from(name) + ".png";
@@ -35,7 +35,7 @@ pub fn postprocess(
     settings: &PostProcessSettings,
 ) -> PostProcessResult {
     eprintln!("Postprocessing...");
-    let denoised_pass = if settings.denoise {
+    /* let denoised_pass = if settings.denoise {
         Some(denoise::denoise_with_albedo_normal(
             &render_result.color_pass.as_ref().unwrap(),
             &render_result.albedo_pass,
@@ -50,9 +50,9 @@ pub fn postprocess(
     } else {
         render_result.color_pass.as_ref().unwrap().clone()
     };
-
+    */
     PostProcessResult {
-        denoised_image: denoised_pass,
-        beauty_image: beauty_image,
+        denoised_image: None,
+        beauty_image: None,
     }
 }
