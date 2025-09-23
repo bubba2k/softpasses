@@ -1,3 +1,5 @@
+use std::array;
+
 use glam::DVec3;
 use itertools::Itertools;
 use rayon::prelude::*;
@@ -11,7 +13,7 @@ use crate::tracer::hittable::{HittableTrait, RayInfo};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
 
-trait RenderPass<const N: usize> {
+pub trait RenderPass<const N: usize> {
     fn trace_sample(
         &mut self,
         ray: &Ray,
@@ -35,7 +37,17 @@ trait RenderPass<const N: usize> {
 struct CombinedPass {
     // Accumulate in double precision
     sums: [glam::DVec3; 3],
-    num_samples: u32,
+    num_accumulated_samples: u32,
+}
+
+impl Default for CombinedPass {
+    fn default() -> Self {
+        let sums = array::from_fn(|_| glam::dvec3(0.0, 0.0, 0.0));
+        CombinedPass {
+            sums,
+            num_accumulated_samples: 0,
+        }
+    }
 }
 
 impl RenderPass<3> for CombinedPass {
@@ -50,18 +62,18 @@ impl RenderPass<3> for CombinedPass {
         for i in 0..3 {
             self.sums[i] += DVec3::from(sample[i]);
         }
-        self.num_samples += 1;
+        self.num_accumulated_samples += 1;
     }
 
     fn clear(&mut self) {
         for sum in self.sums.iter_mut() {
             *sum = glam::dvec3(0.0, 0.0, 0.0)
         }
-        self.num_samples = 0;
+        self.num_accumulated_samples = 0;
     }
 
     fn yield_estimate(&self) -> [Color; 3] {
-        let samples_inv = 1.0 / self.num_samples as f64;
+        let samples_inv = 1.0 / self.num_accumulated_samples as f64;
         let mut estimate: [Color; 3] = [Color::default(); 3];
 
         for i in 0..3 {
@@ -605,6 +617,13 @@ pub trait Scheduler {
         world: &World,
     ) -> (Vec<Color>, Vec<Color>, Vec<Color>);
 
+    fn render_with_pass<RP: RenderPass<N> + Default, const N: usize>(
+        &self,
+        camera: &Camera,
+        settings: RenderSettings,
+        world: &World,
+    ) -> [Vec<Color>; N];
+
     fn estimate_render_time(&self, camera: &Camera, world: &World, settings: &RenderSettings) {
         // Attempt to get a somewhat accurate estimate of the total render time here.
         // Render the entire image once at 1 spp, then extrapolate the full render time from that.
@@ -642,25 +661,8 @@ pub trait Scheduler {
 
         // Compute the passes
         let (color_pass, albedo_pass, normal_pass) = {
-            let (color_pass, albedo_pass, normal_pass) =
-                self.render_multipass(&camera, settings.clone(), world);
-
-            /* This is what we would do if we used singlepass tracing.
-            For now, multipass has proven to be far superior in performance.
-            let aux_pass_settings = RenderSettings {
-                samples_per_pixel: 8,
-                ..settings
-            };
-            eprintln!("Performing multi pass...");
-            let color_pass = self.render_pass(&camera, settings.clone(), world, trace_ray_it);
-            eprintln!("Performing albedo pass...");
-            let albedo_pass =
-                self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_albedo);
-            eprintln!("Performing normal pass...");
-            let normal_pass =
-                self.render_pass(&camera, aux_pass_settings.clone(), world, trace_ray_normal);
-            */
-
+            let [color_pass, albedo_pass, normal_pass] =
+                self.render_with_pass::<CombinedPass, _>(&camera, settings.clone(), world);
             (
                 Some(Texture::from_raw(
                     settings.image_width as usize,
@@ -792,6 +794,57 @@ impl Scheduler for TiledScheduler {
             Self::assemble_tiles(tiles_normal, num_tiles_hor as usize, tile_size_clamped);
 
         (assembled_color, assembled_albedo, assembled_normal)
+    }
+
+    fn render_with_pass<RP: RenderPass<N> + Default, const N: usize>(
+        &self,
+        camera: &Camera,
+        settings: RenderSettings,
+        world: &World,
+    ) -> [Vec<Color>; N] {
+        // Clamp tile size to minimum of 1 and maximum of image width.
+        // -> This way, at least 1 tile fits entirely into the image.
+        let tile_size_clamped = self
+            .tile_size
+            .clamp(1, u32::min(settings.image_height, settings.image_width));
+
+        // Compute the number of tiles that fit into the image, including tiles that fit only partially.
+        let num_tiles_ver = settings.image_height.div_ceil(tile_size_clamped);
+        let num_tiles_hor = settings.image_width.div_ceil(tile_size_clamped);
+
+        let mut tiles = Vec::<ImageRegion>::new();
+        for (yi, xi) in (0..num_tiles_ver).cartesian_product(0..num_tiles_hor) {
+            let (tile_x, tile_y) = (xi * tile_size_clamped, yi * tile_size_clamped);
+            // Calculate the actual width and height of the tile. This only matters at the right and bottom
+            // edges, where a tile might not fit entirely into the screen, and we have to crop it to fit.
+            let tile_width = (settings.image_width - tile_x).clamp(0, tile_size_clamped);
+            let tile_height = (settings.image_height - tile_y).clamp(0, tile_size_clamped);
+
+            tiles.push(ImageRegion::new(tile_x, tile_y, tile_width, tile_height));
+        }
+
+        // Render out the tiles
+        let rendered_tiles: Vec<[Vec<Color>; N]> = tiles
+            // Rayon does all the thread magic for us here
+            .par_iter()
+            .map(|tile| render_region_with_pass::<N, RP>(&camera, &settings, &world, tile.clone()))
+            .collect();
+
+        let mut per_channel_tiles: [Vec<Vec<Color>>; N] =
+            std::array::from_fn(|_| Vec::with_capacity(rendered_tiles.len()));
+
+        for tile in rendered_tiles.iter() {
+            for i in 0..N {
+                per_channel_tiles[i].push(tile[i].clone());
+            }
+        }
+
+        let assembled_per_channel: [Vec<Color>; N] = std::array::from_fn(|i| {
+            let tiles_for_channel = per_channel_tiles[i].clone();
+            Self::assemble_tiles(tiles_for_channel, num_tiles_hor as usize, tile_size_clamped)
+        });
+
+        assembled_per_channel
     }
 }
 
