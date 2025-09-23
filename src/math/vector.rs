@@ -1,5 +1,3 @@
-use glam::DVec3;
-
 // Set some type aliases here...
 // We do this so we can easily switch between Double and Float,
 // and glams handy Vec_A types aligned for SSE2
