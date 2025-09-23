@@ -37,14 +37,14 @@ fn main() -> Result<(), String> {
         )))
     };
 
-    let width: u32 = 1280 / 1;
-    let height: u32 = 1024 / 1;
+    let width: u32 = 1280 / 4;
+    let height: u32 = 1024 / 4;
     let aspect_ratio: Float = width as Float / height as Float;
 
-    let pose = camera::Pose::look_at(Vec3f::new(1.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
-    let lens = camera::Lens::new(15, 35, aspect_ratio, 4.5, 0.5);
+    let pose = camera::Pose::look_at(Vec3f::new(-1.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
+    let lens = camera::Lens::new(15, 35, aspect_ratio, 4.5, 0.25);
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 128,
+        samples_per_pixel: 16,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -77,10 +77,7 @@ fn main() -> Result<(), String> {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let sponza = BVHMesh::from_obj_file(
-        Path::new("assets/models/dragon_decimated.obj"),
-        mat_metal.clone(),
-    );
+    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), mat_metal.clone());
 
     let objects = vec![sponza, floor];
 
