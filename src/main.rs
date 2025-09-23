@@ -37,14 +37,14 @@ fn main() -> Result<(), String> {
         )))
     };
 
-    let width: u32 = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32 = 1280 / 1;
+    let height: u32 = 1024 / 1;
     let aspect_ratio: Float = width as Float / height as Float;
 
-    let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
-    let lens = camera::Lens::new(15, 35, aspect_ratio, 18.1, 0.0);
+    let pose = camera::Pose::look_at(Vec3f::new(1.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
+    let lens = camera::Lens::new(15, 35, aspect_ratio, 4.5, 0.5);
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 24,
+        samples_per_pixel: 128,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -60,7 +60,7 @@ fn main() -> Result<(), String> {
     let mat_floor = MatLambertDiffuse::new(Vec3f::new(1.0, 1.0, 1.0));
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
-    let mat_metal = MatPrincipled::new(vec3(0.2, 0.3, 0.9), 1.0, 0.1);
+    let mat_metal = MatPrincipled::new(vec3(0.721, 0.32, 0.666), 1.0, 0.01);
     let mat_rough = MatLambertDiffuse::new(vec3(0.9, 0.9, 0.9));
     let _mat_normal_dbg = MatNormalDebug::new();
     let _mat_face_dbg = MatFaceDebug::new();
@@ -77,11 +77,14 @@ fn main() -> Result<(), String> {
     let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
     let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
     let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), mat_rough.clone());
+    let sponza = BVHMesh::from_obj_file(
+        Path::new("assets/models/dragon_decimated.obj"),
+        mat_metal.clone(),
+    );
 
     let objects = vec![sponza, floor];
 
-    let env_texture = Texture::from_path(Path::new("assets/hdri/overcastpines_4k.hdr")).unwrap();
+    let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
 
     let background = Background::from_environment_texture(env_texture, 0.0);
 
