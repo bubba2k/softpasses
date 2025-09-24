@@ -14,7 +14,13 @@ use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
 use std::collections::HashMap;
 
-pub trait RenderPass<const N: usize> {
+/// A group of named and ordered renderpasses, e.g. Color, Albedo and Normal passes combined into one.
+/// Template parameter @N is the number of passes.
+/// Grouping of renderpasses allows them to be computed "simultaneously" by smart definition of
+/// `accumulate_sample`, instead of having to traverse the scene over and over again for each pass.
+/// This is especially relevant for recursive - i.e. those involving numerous bounces - passes, since
+/// a *significant* portion of the runtime goes towards computation of ray traversal.
+pub trait RenderPipeline<const N: usize> {
     fn trace_sample(
         &mut self,
         ray: &Ray,
@@ -23,7 +29,14 @@ pub trait RenderPass<const N: usize> {
         ray_info: &RayInfo,
     ) -> [Color; N];
 
+    /// Return the average of the accumulated samples.
     fn yield_estimate(&self) -> [Color; N];
+
+    /// Compute a sample, where
+    /// @ray is the initial ray shot into the scene (usually from a camera)
+    /// @settings is the settings to render with.
+    /// @world is the scene
+    /// @ray_info is extended information about the intial ray
     fn accumulate_sample(
         &mut self,
         ray: &Ray,
@@ -32,28 +45,31 @@ pub trait RenderPass<const N: usize> {
         ray_info: &RayInfo,
     );
 
+    /// Returns the name of the passes in order.
     fn pass_names(i: usize) -> String;
 
+    /// Erase accumulated samples
     fn clear(&mut self);
 }
 
-pub struct DebugPass {
+/// The default pipeline that computes color, albedo and normal passes.
+pub struct DefaultPipeline {
     // Accumulate in double precision
     sums: [glam::DVec3; 3],
     num_accumulated_samples: u32,
 }
 
-impl Default for DebugPass {
+impl Default for DefaultPipeline {
     fn default() -> Self {
         let sums = array::from_fn(|_| glam::dvec3(0.0, 0.0, 0.0));
-        DebugPass {
+        DefaultPipeline {
             sums,
             num_accumulated_samples: 0,
         }
     }
 }
 
-impl RenderPass<3> for DebugPass {
+impl RenderPipeline<3> for DefaultPipeline {
     fn pass_names(i: usize) -> String {
         String::from(["color", "albedo", "normal"][i])
     }
@@ -169,7 +185,7 @@ impl RenderPass<3> for DebugPass {
 }
 
 // Render a specific region of the image.
-pub fn render_region_with_pass<const N: usize, RP: RenderPass<N> + Default>(
+pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
     cam: &Camera,
     settings: &RenderSettings,
     world: &World,
@@ -286,14 +302,14 @@ impl RenderResult {
 }
 
 pub trait Scheduler {
-    fn render_with_pass<RP: RenderPass<N> + Default, const N: usize>(
+    fn render_with_pass<RP: RenderPipeline<N> + Default, const N: usize>(
         &self,
         camera: &Camera,
         settings: RenderSettings,
         world: &World,
     ) -> [Vec<Color>; N];
 
-    fn estimate_render_time<RP: RenderPass<N> + Default, const N: usize>(
+    fn estimate_render_time<RP: RenderPipeline<N> + Default, const N: usize>(
         &self,
         camera: &Camera,
         world: &World,
@@ -327,7 +343,7 @@ pub trait Scheduler {
         );
     }
 
-    fn render<RP: RenderPass<N> + Default, const N: usize>(
+    fn render<RP: RenderPipeline<N> + Default, const N: usize>(
         &self,
         camera: Camera,
         settings: RenderSettings,
@@ -340,7 +356,7 @@ pub trait Scheduler {
 
         // Compute the passes
         let passes: [Vec<Color>; _] =
-            self.render_with_pass::<DebugPass, _>(&camera, settings.clone(), world);
+            self.render_with_pass::<DefaultPipeline, _>(&camera, settings.clone(), world);
 
         // Make the hashmap
         let mut passes_map: HashMap<String, Texture> = HashMap::default();
@@ -373,7 +389,7 @@ pub struct TiledScheduler {
 }
 
 impl Scheduler for TiledScheduler {
-    fn render_with_pass<RP: RenderPass<N> + Default, const N: usize>(
+    fn render_with_pass<RP: RenderPipeline<N> + Default, const N: usize>(
         &self,
         camera: &Camera,
         settings: RenderSettings,
