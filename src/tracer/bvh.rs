@@ -492,6 +492,7 @@ impl BVHMesh {
             // Traverse the bvh
             let node = &self.nodes[to_discover.pop().unwrap()];
 
+            // A node is a leaf if it contains more than 0 prims
             if node.num_prims > 0 {
                 // Determine the closest primitve hit inside this leaf node.
                 // Since we are doing an ordered traverse (from nodes closest to furthest to camera),
@@ -555,7 +556,12 @@ impl BVHMesh {
         None
     }
 
-    fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> Option<(u32, Float)> {
+    fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> Option<BVHQueryResult> {
+        // Query metrics
+        let mut num_aabb_intersects = 0;
+        let mut num_aabb_checks = 0;
+        let mut num_primitive_checks = 0;
+
         // Keep track of the nodes to discover here (DFS)
         let mut to_discover = Vec::<usize>::new();
         // Save the leaf nodes containing the primitives we have to check later here
@@ -570,18 +576,20 @@ impl BVHMesh {
         while to_discover.len() != 0 {
             // Traverse the bvh
             let node = &self.nodes[to_discover.pop().unwrap()];
+            num_aabb_checks += 1;
 
             if !node.aabb.hit(ray, t_interval) {
                 continue;
-            }
-
-            if node.num_prims > 0 {
-                // Node is a leaf, save it!
-                visited_leaf_nodes.push(node);
             } else {
-                // Node is interior, discover its children
-                to_discover.push((node.first + 1) as usize);
-                to_discover.push(node.first as usize);
+                num_aabb_intersects += 1;
+                if node.num_prims > 0 {
+                    // Node is a leaf, save it!
+                    visited_leaf_nodes.push(node);
+                } else {
+                    // Node is interior, discover its children
+                    to_discover.push((node.first + 1) as usize);
+                    to_discover.push(node.first as usize);
+                }
             }
         }
 
@@ -601,7 +609,19 @@ impl BVHMesh {
             .flatten()
             .min_by(|a, b| a.1.total_cmp(&b.1));
 
-        closest_hit
+        num_primitive_checks = visited_leaf_nodes.iter().map(|node| node.num_prims).sum();
+
+        if let Some((prim_idx, t_hit)) = closest_hit {
+            Some(BVHQueryResult {
+                primitive_index: prim_idx,
+                hit_t: t_hit,
+                num_aabb_checks: num_aabb_checks,
+                num_aabb_hits: num_aabb_checks,
+                num_primitve_checks: num_primitive_checks,
+            })
+        } else {
+            None
+        }
     }
 
     fn try_hit_rec(&self, ray: &Ray, t_interval: Interval, bvh_idx: u32) -> Option<(u32, Float)> {
@@ -666,7 +686,7 @@ impl HittableTrait for BVHMesh {
             num_aabb_checks,
             num_aabb_hits,
             num_primitve_checks,
-        }) = Self::try_hit_it_ordered(&self, ray, t_interval)
+        }) = Self::try_hit_it(&self, ray, t_interval)
         {
             let point_hit = ray.at(t_hit);
 
@@ -700,6 +720,8 @@ impl HittableTrait for BVHMesh {
                 &self.material,
                 obj_normal,
                 num_aabb_hits,
+                num_aabb_checks,
+                num_primitve_checks,
             ))
         } else {
             None

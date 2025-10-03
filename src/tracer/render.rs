@@ -17,12 +17,16 @@ use std::collections::HashMap;
 /// A group of named and ordered renderpasses, e.g. Color, Albedo and Normal passes combined into one.
 /// Template parameter @N is the number of passes.
 /// Grouping of renderpasses allows them to be computed "simultaneously" by smart definition of
-/// `accumulate_sample`, instead of having to traverse the scene over and over again for each pass.
+/// `trace_sample`, instead of having to traverse the scene over and over again for each pass.
 /// This is especially relevant for recursive - i.e. those involving numerous bounces - passes, since
-/// a *significant* portion of the runtime goes towards computation of ray traversal.
+/// a *significant* portion of the runt ime goes towards computation of ray traversal.
 pub trait RenderPipeline<const N: usize> {
+    /// Compute a sample, where
+    /// @ray is the initial ray shot into the scene (usually from a camera)
+    /// @settings is the settings to render with.
+    /// @world is the scene
+    /// @ray_info is extended information about the intial ray
     fn trace_sample(
-        &mut self,
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
@@ -32,11 +36,7 @@ pub trait RenderPipeline<const N: usize> {
     /// Return the average of the accumulated samples.
     fn yield_estimate(&self) -> [Color; N];
 
-    /// Compute a sample, where
-    /// @ray is the initial ray shot into the scene (usually from a camera)
-    /// @settings is the settings to render with.
-    /// @world is the scene
-    /// @ray_info is extended information about the intial ray
+    /// Save a previously computed (by `trace_sample`, usually) sample.
     fn accumulate_sample(
         &mut self,
         ray: &Ray,
@@ -81,7 +81,7 @@ impl RenderPipeline<3> for DefaultPipeline {
         world: &World,
         ray_info: &RayInfo,
     ) {
-        let sample = self.trace_sample(ray, settings, world, ray_info);
+        let sample = Self::trace_sample(ray, settings, world, ray_info);
         for i in 0..3 {
             self.sums[i] += DVec3::from(sample[i]);
         }
@@ -107,7 +107,6 @@ impl RenderPipeline<3> for DefaultPipeline {
     }
 
     fn trace_sample(
-        &mut self,
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
@@ -184,6 +183,92 @@ impl RenderPipeline<3> for DefaultPipeline {
     }
 }
 
+pub struct BVHDebugPipeline {
+    sums: [glam::DVec3; 3],
+    num_accumulated_samples: usize,
+}
+
+impl Default for BVHDebugPipeline {
+    fn default() -> Self {
+        BVHDebugPipeline {
+            sums: std::array::from_fn(|_| glam::dvec3(0.0, 0.0, 0.0)),
+            num_accumulated_samples: 0,
+        }
+    }
+}
+
+impl RenderPipeline<3> for BVHDebugPipeline {
+    fn clear(&mut self) {
+        self.num_accumulated_samples = 0;
+        self.sums = std::array::from_fn(|_| glam::dvec3(0.0, 0.0, 0.0))
+    }
+
+    fn pass_names(i: usize) -> String {
+        String::from(
+            [
+                "num_aabb_intersects",
+                "num_aabb_checks",
+                "num_primitive_checks",
+            ][i],
+        )
+    }
+
+    fn yield_estimate(&self) -> [Color; 3] {
+        let samples_inv = 1.0 / self.num_accumulated_samples as f64;
+        let mut estimate: [Color; 3] = [Color::default(); 3];
+
+        for i in 0..3 {
+            estimate[i] = vec3_from_dvec3(self.sums[i] * samples_inv);
+        }
+
+        estimate
+    }
+
+    fn accumulate_sample(
+        &mut self,
+        ray: &Ray,
+        settings: &RenderSettings,
+        world: &World,
+        ray_info: &RayInfo,
+    ) {
+        let sample = Self::trace_sample(ray, settings, world, ray_info);
+
+        for i in 0..3 {
+            self.sums[i] += DVec3::from(sample[i]);
+        }
+
+        self.num_accumulated_samples += 1;
+    }
+
+    fn trace_sample(
+        ray: &Ray,
+        settings: &RenderSettings,
+        world: &World,
+        ray_info: &RayInfo,
+    ) -> [Color; 3] {
+        let mut passes: [usize; 3] = [0, 0, 0];
+        // Remember:
+        // 0: "num_aabb_intersects",
+        // 1: "num_aabb_checks",
+        // 2: "num_primitive_checks",
+
+        if let Some(hit_record) = world
+            .objects_bvh
+            .try_hit(ray, settings.ray_limits, ray_info)
+        {
+            passes[0] += hit_record.num_aabb_intersects as usize;
+            passes[1] += hit_record.num_aabb_checks as usize;
+            passes[2] += hit_record.num_primitive_checks as usize;
+        }
+
+        let mut res: [Color; 3] = array::from_fn(|_| Color::default());
+        for i in 0..3 {
+            res[i] = glam::vec3(passes[i] as f32, passes[i] as f32, passes[i] as f32);
+        }
+        res
+    }
+}
+
 // Render a specific region of the image.
 pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
     cam: &Camera,
@@ -221,6 +306,8 @@ pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
                 let ray_info = RayInfo {
                     num_aabb_intersects: 0,
                     num_bounces: 0,
+                    num_aabb_checks: 0,
+                    num_primitive_checks: 0,
                 };
 
                 renderpass.accumulate_sample(&ray, &settings, &world, &ray_info);
@@ -356,7 +443,7 @@ pub trait Scheduler {
 
         // Compute the passes
         let passes: [Vec<Color>; _] =
-            self.render_with_pass::<DefaultPipeline, _>(&camera, settings.clone(), world);
+            self.render_with_pass::<RP, _>(&camera, settings.clone(), world);
 
         // Make the hashmap
         let mut passes_map: HashMap<String, Texture> = HashMap::default();
