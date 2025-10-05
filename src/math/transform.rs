@@ -1,5 +1,6 @@
 use glam::{Affine3A, Quat, Vec3, vec3};
 
+#[allow(dead_code)]
 pub trait Transformable {
     fn apply_transform(self, transform: &Transform) -> Self;
 }
@@ -16,6 +17,7 @@ impl Transformable for Transform {
     }
 }
 
+#[allow(dead_code)]
 impl Transform {
     pub fn new() -> Self {
         Transform {

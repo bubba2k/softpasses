@@ -27,6 +27,7 @@ pub enum Background {
     EnvironmentMap(Texture, Float),
 }
 
+#[allow(dead_code)]
 impl Background {
     pub fn from_function(f: fn(Vec3f) -> Color) -> Self {
         Background::Custom(f)

@@ -4,7 +4,6 @@ use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
 use crate::tracer;
-use std::path::Path;
 
 pub struct RayInfo {
     pub num_aabb_intersects: u32,
@@ -111,7 +110,6 @@ pub enum Hittable {
     Parallelogram(Parallelogram),
     Parallelepiped(Parallelepiped),
     Plane(Plane),
-    Mesh(Mesh),
     BVHMesh(tracer::bvh::BVHMesh),
 }
 
@@ -126,7 +124,6 @@ impl Transformable for Hittable {
                 Hittable::Parallelogram(parallelogram.apply_transform(transform))
             }
             Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
-            Hittable::Mesh(mesh) => Hittable::Mesh(mesh.apply_transform(transform)),
             Hittable::BVHMesh(bvh_mesh) => Hittable::BVHMesh(bvh_mesh.apply_transform(transform)),
         }
     }
@@ -139,7 +136,6 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.centroid(),
             Hittable::Parallelogram(parallelogram) => parallelogram.centroid(),
             Hittable::Plane(plane) => plane.centroid(),
-            Hittable::Mesh(mesh) => mesh.centroid(),
             Hittable::BVHMesh(bvh_mesh) => bvh_mesh.centroid(),
         }
     }
@@ -150,7 +146,6 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.get_aabb(),
             Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
             Hittable::Plane(plane) => plane.get_aabb(),
-            Hittable::Mesh(mesh) => mesh.get_aabb(),
             Hittable::BVHMesh(bvh_mesh) => bvh_mesh.get_aabb(),
         }
     }
@@ -161,7 +156,6 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.num_primitives(),
             Hittable::Parallelogram(parallelogram) => parallelogram.num_primitives(),
             Hittable::Plane(plane) => plane.num_primitives(),
-            Hittable::Mesh(mesh) => mesh.num_primitives(),
             Hittable::BVHMesh(bvh_mesh) => bvh_mesh.num_primitives(),
         }
     }
@@ -176,7 +170,6 @@ impl HittableTrait for Hittable {
                 parallelogram.try_hit(ray, t_interval, ray_info)
             }
             Hittable::Plane(plane) => plane.try_hit(ray, t_interval, ray_info),
-            Hittable::Mesh(mesh) => mesh.try_hit(ray, t_interval, ray_info),
             Hittable::BVHMesh(bvh_mesh) => bvh_mesh.try_hit(ray, t_interval, ray_info),
         }
     }
@@ -207,10 +200,6 @@ impl Default for AABoundingBox {
 }
 
 impl AABoundingBox {
-    pub fn new(min: Vec3f, max: Vec3f) -> Self {
-        AABoundingBox { min, max }
-    }
-
     // Expand bounding box to a given point, if necessary
     pub fn expand(&mut self, point: &Vec3f) {
         self.min = Vec3f::new(
@@ -283,16 +272,13 @@ impl AABoundingBox {
 }
 
 #[derive(Default, Clone)]
+#[allow(dead_code)]
 pub struct HittableList {
     list: Vec<Hittable>,
     aabb: AABoundingBox,
 }
 
 impl HittableList {
-    pub fn clear(&mut self) {
-        self.list.clear();
-    }
-
     pub fn push(&mut self, hittable: Hittable) {
         self.aabb.expand(&hittable.get_aabb().max);
         self.aabb.expand(&hittable.get_aabb().min);
@@ -402,6 +388,7 @@ pub struct Plane {
     material: Material,
 }
 
+#[allow(dead_code)]
 impl Plane {
     pub fn new(normal: Vec3f, d: Float, mat: Material) -> Hittable {
         Hittable::Plane(Plane {
@@ -706,7 +693,6 @@ impl HittableTrait for Parallelogram {
 pub struct Parallelepiped {
     // List of the 6 faces
     list: HittableList,
-    material: Material,
 }
 
 impl Transformable for Parallelepiped {
@@ -733,6 +719,7 @@ impl HittableTrait for Parallelepiped {
     }
 }
 
+#[allow(dead_code)]
 impl Parallelepiped {
     fn _new(
         back_bottom_left: Vec3f,
@@ -795,10 +782,7 @@ impl Parallelepiped {
             material.clone(),
         ));
 
-        Parallelepiped {
-            list: list,
-            material: material,
-        }
+        Parallelepiped { list: list }
     }
 
     pub fn new(
@@ -925,196 +909,5 @@ impl Triangle {
         let t = f * edge2.dot(q);
 
         if interval.contains(&t) { Some(t) } else { None }
-    }
-}
-
-#[derive(Clone)]
-pub struct Mesh {
-    aabb: AABoundingBox,
-    triangles: Vec<Triangle>,
-    material: Material,
-}
-
-pub fn load_obj(path: &Path) -> Vec<Triangle> {
-    const LOAD_OPTIONS: tobj::LoadOptions = tobj::LoadOptions {
-        single_index: true,
-        triangulate: true,
-        ignore_lines: true,
-        ignore_points: true,
-    };
-
-    let (models, _) = tobj::load_obj(path, &LOAD_OPTIONS).expect("Failed to load OBJ file");
-    let mut positions = Vec::new();
-    let mut normals = Vec::new();
-    let mesh = &models[0].mesh;
-    // Have to reorder: We want all triangles to be in order, so use the indices
-    // to achieve that
-    // Copy triangle positions
-    for index in mesh.indices.iter() {
-        let vert_idx = (*index as usize) * 3;
-        let vert = Vec3f::new(
-            mesh.positions[vert_idx],
-            mesh.positions[vert_idx + 1],
-            mesh.positions[vert_idx + 2],
-        );
-        positions.push(vert);
-    }
-    // Do the same for normals
-    if !mesh.normals.is_empty() {
-        eprintln!("No normals given in obj file {:?}. Generating...", path);
-        for index in mesh.indices.iter() {
-            let vert_idx = (*index as usize) * 3;
-            let normal = Vec3f::new(
-                mesh.normals[vert_idx],
-                mesh.normals[vert_idx + 1],
-                mesh.normals[vert_idx + 2],
-            );
-            normals.push(normal);
-        }
-    } else {
-        // If there are no normals specified in the file, compute (flat) normals
-        // from vertex positions.
-        for tri in positions.chunks(3) {
-            let edge1 = tri[1] - tri[0];
-            let edge2 = tri[2] - tri[0];
-            let obj_normal = edge1.cross(edge2).normalize();
-            normals.push(obj_normal);
-            normals.push(obj_normal);
-            normals.push(obj_normal);
-        }
-    }
-
-    // Group positions and normals
-    let mut triangles = Vec::new();
-    for i in (0..positions.len()).step_by(3) {
-        triangles.push(Triangle {
-            positions: [positions[i + 0], positions[i + 1], positions[i + 2]],
-            normals: [normals[i + 0], normals[i + 1], normals[i + 2]],
-        });
-    }
-
-    triangles
-}
-
-impl Mesh {
-    pub fn from_obj_file(path: &Path, material: Material) -> Hittable {
-        let triangles = load_obj(path);
-
-        let mut aabb = AABoundingBox::default();
-        for tri in triangles.iter() {
-            aabb.expand(&tri.positions[0]);
-            aabb.expand(&tri.positions[1]);
-            aabb.expand(&tri.positions[2]);
-        }
-
-        Hittable::Mesh(Mesh {
-            aabb,
-            material,
-            triangles,
-        })
-    }
-}
-
-impl Transformable for Mesh {
-    fn apply_transform(self, transform: &Transform) -> Self {
-        // 1. Apply transform to vertex positions and normals
-        let transformed_triangles: Vec<Triangle> = self
-            .triangles
-            .into_iter()
-            .map(|tri| tri.apply_transform(transform))
-            .collect();
-        let mut new_aabb = AABoundingBox::default();
-
-        for tri in transformed_triangles.iter() {
-            new_aabb.expand(&tri.positions[0]);
-            new_aabb.expand(&tri.positions[1]);
-            new_aabb.expand(&tri.positions[2]);
-        }
-
-        Mesh {
-            triangles: transformed_triangles,
-            aabb: new_aabb,
-            ..self
-        }
-    }
-}
-
-impl HittableTrait for Mesh {
-    fn num_primitives(&self) -> u32 {
-        1
-    }
-
-    fn get_aabb(&self) -> AABoundingBox {
-        self.aabb.clone()
-    }
-
-    fn centroid(&self) -> Vec3f {
-        (self.aabb.max - self.aabb.min) * 0.5 + self.aabb.min
-    }
-
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
-        // Do a simple aabb check
-        if !self.aabb.hit(ray, t_interval) {
-            return None;
-        }
-
-        if let Some((tri_idx, t_hit)) = self
-            .triangles
-            .iter()
-            .enumerate()
-            .map(|(idx, tri)| {
-                if let Some(t) = tri.ray_intersection(ray, &t_interval) {
-                    Some((idx, t))
-                } else {
-                    None
-                }
-            })
-            .flatten()
-            .min_by(|(_, t1), (_, t2)| t1.total_cmp(t2))
-        {
-            if t_interval.contains(&t_hit) {
-                let point_hit = ray.at(t_hit);
-
-                // Interpolate normal of the triangle. First, we have to find the barycentric
-                // coordinates, u, v, w.
-                let a = self.triangles[tri_idx].positions[0];
-                let b = self.triangles[tri_idx].positions[1];
-                let c = self.triangles[tri_idx].positions[2];
-                let v0 = b - a;
-                let v1 = c - a;
-                let v2 = point_hit - a;
-                let d00 = v0.dot(v0);
-                let d01 = v0.dot(v1);
-                let d11 = v1.dot(v1);
-                let d20 = v2.dot(v0);
-                let d21 = v2.dot(v1);
-                let denom = d00 * d11 - d01 * d01;
-                let v = (d11 * d20 - d01 * d21) / denom;
-                let w = (d00 * d21 - d01 * d20) / denom;
-                let u = 1.0 - v - w;
-
-                // Now interpolate between the three corners.
-                let obj_normal = (self.triangles[tri_idx].normals[0] * u
-                    + self.triangles[tri_idx].normals[1] * v
-                    + self.triangles[tri_idx].normals[2] * w)
-                    .normalize();
-
-                Some(HitRecord::new(
-                    ray,
-                    t_hit,
-                    point_hit,
-                    ray_info.num_bounces,
-                    &self.material,
-                    obj_normal,
-                    ray_info.num_aabb_intersects,
-                    ray_info.num_aabb_checks,
-                    ray_info.num_aabb_intersects,
-                ))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
     }
 }

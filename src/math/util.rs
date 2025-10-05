@@ -15,14 +15,6 @@ impl ImageRegion {
             y: (y_begin, y_begin + y_size),
         }
     }
-
-    pub const fn whole_image(image_width: u32, image_height: u32) -> Self {
-        Self::new(0, 0, image_width, image_height)
-    }
-}
-
-pub fn linear_to_gamma(linear_component: Float) -> Float {
-    linear_component.clamp(0.0, 1.0).sqrt()
 }
 
 pub fn rand_range_f(low: Float, high: Float) -> Float {
@@ -60,6 +52,7 @@ pub fn rand_vec_on_unit_disc() -> Vec3f {
     }
 }
 
+#[allow(dead_code)]
 pub fn rand_unit_vec_on_hemisphere(normal: &Vec3f) -> Vec3f {
     let rnd_vec = rand_unit_vec();
     if rnd_vec.dot(*normal) > 0.0 {
