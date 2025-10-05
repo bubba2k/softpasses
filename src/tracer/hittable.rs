@@ -6,9 +6,6 @@ use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plan
 use crate::tracer;
 
 pub struct RayInfo {
-    pub num_aabb_intersects: u32,
-    pub num_aabb_checks: u32,
-    pub num_primitive_checks: u32,
     pub num_bounces: u32,
 }
 
@@ -19,9 +16,6 @@ pub struct HitRecord {
     pub material: Material,
     pub t: Float,
     pub front_face: bool, // True if ray hit the front of a face/surface. False if ray is on inside
-    pub num_aabb_intersects: u32, // For BVH debugging
-    pub num_aabb_checks: u32,
-    pub num_primitive_checks: u32,
 }
 
 impl<'a> HitRecord {
@@ -32,9 +26,6 @@ impl<'a> HitRecord {
         num_bounces: u32,
         obj_mat: &'a Material,
         obj_normal: Vec3f,
-        num_aabb_intersects: u32,
-        num_aabb_checks: u32,
-        num_primitve_checks: u32,
     ) -> Self {
         // Check whether we hit the inside or outside
         if ray.dir.dot(obj_normal) > 0.0 {
@@ -46,9 +37,6 @@ impl<'a> HitRecord {
                 num_bounces,
                 t: t_hit,
                 front_face: false,
-                num_aabb_intersects: num_aabb_intersects,
-                num_aabb_checks: num_aabb_checks,
-                num_primitive_checks: num_primitve_checks,
             }
         } else {
             // Ray hit the face
@@ -59,9 +47,6 @@ impl<'a> HitRecord {
                 num_bounces: num_bounces,
                 t: t_hit,
                 front_face: true,
-                num_aabb_intersects: num_aabb_intersects,
-                num_aabb_checks: num_aabb_checks,
-                num_primitive_checks: num_primitve_checks,
             }
         }
     }
@@ -352,9 +337,6 @@ impl HittableTrait for Sphere {
                     ray_info.num_bounces,
                     &self.material,
                     sphere_normal,
-                    ray_info.num_aabb_intersects,
-                    ray_info.num_aabb_checks,
-                    ray_info.num_primitive_checks,
                 ))
             } else {
                 None
@@ -448,9 +430,6 @@ impl HittableTrait for Plane {
                 ray_info.num_bounces,
                 &self.material,
                 self.normal,
-                ray_info.num_aabb_intersects,
-                ray_info.num_aabb_checks,
-                ray_info.num_primitive_checks,
             ))
         }
     }
@@ -655,9 +634,6 @@ impl HittableTrait for Parallelogram {
                     ray_info.num_bounces,
                     &self.material,
                     self.normal,
-                    ray_info.num_aabb_intersects,
-                    ray_info.num_aabb_checks,
-                    ray_info.num_primitive_checks,
                 ))
             } else {
                 None

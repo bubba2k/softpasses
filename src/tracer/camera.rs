@@ -41,8 +41,6 @@ impl Viewport {
 
 #[derive(Clone)]
 pub struct Lens {
-    pub focal_length: Float,
-    pub sensor_width: Float,
     pub afov_rad: Float,
     pub aspect_ratio: Float,
 
@@ -66,8 +64,6 @@ impl Lens {
         let afov_rad = 2.0 * Float::atan(sensor_height / (2.0 * focal_length));
 
         Lens {
-            focal_length: focal_length,
-            sensor_width: sensor_width,
             afov_rad: afov_rad,
             aspect_ratio: aspect_ratio,
 
