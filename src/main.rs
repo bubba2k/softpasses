@@ -1,6 +1,3 @@
-// Allow dead code for now
-#![allow(dead_code)]
-
 mod io;
 mod math;
 mod postproc;
@@ -8,6 +5,7 @@ mod tracer;
 use std::path::{Path, PathBuf};
 
 use crate::postproc::{PostProcessSettings, postprocess};
+use crate::tracer::render::{BVHDebugPipeline, DefaultPipeline};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
@@ -37,12 +35,12 @@ fn main() -> Result<(), String> {
         )))
     };
 
-    let width: u32 = 1280 / 4;
-    let height: u32 = 1024 / 4;
+    let width: u32 = 1280 / 1;
+    let height: u32 = 1024 / 1;
     let aspect_ratio: Float = width as Float / height as Float;
 
     let pose = camera::Pose::look_at(Vec3f::new(-1.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
-    let lens = camera::Lens::new(15, 35, aspect_ratio, 4.5, 0.25);
+    let lens = camera::Lens::new(15, 35, aspect_ratio, 4.5, 0.0);
     let render_settings = tracer::render::RenderSettings {
         samples_per_pixel: 16,
         max_bounces: 10,
@@ -87,11 +85,20 @@ fn main() -> Result<(), String> {
 
     let world = World::new(objects, background);
 
-    let render_result = TiledScheduler::new(64).render(camera, render_settings.clone(), &world);
+    let scheduler = TiledScheduler::new(64);
+
+    let debug_result =
+        scheduler.render::<BVHDebugPipeline, _>(camera.clone(), render_settings.clone(), &world);
+    let render_result = TiledScheduler::new(64).render::<DefaultPipeline, 3>(
+        camera,
+        render_settings.clone(),
+        &world,
+    );
     eprintln!("{}", render_result.to_string());
     let postproc_result = postprocess(&render_result, &postproc_settings);
 
     if let Some(output_dir) = output_dir {
+        debug_result.write_images(&output_dir.as_path(), ".exr")?;
         render_result.write_images(output_dir.as_path(), ".exr")?;
         postproc_result.write_images(output_dir.as_path())?;
     }
