@@ -403,7 +403,7 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
             .sum()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         self.try_hit_rec(ray, t_interval, ray_info, 0)
     }
 }
@@ -423,7 +423,7 @@ impl<T: HittableTrait> BVH<T> {
     fn try_hit_rec(
         &self,
         ray: &Ray,
-        t_interval: Interval,
+        t_interval: &Interval,
         ray_info: &RayInfo,
         bvh_idx: u32,
     ) -> Option<HitRecord> {
@@ -434,12 +434,12 @@ impl<T: HittableTrait> BVH<T> {
         if node.num_prims != 0 {
             let range = (node.first as usize)..(node.first as usize + node.num_prims as usize);
             return range
-                .map(|idx| self.hittables[idx].try_hit(ray, t_interval, ray_info))
+                .map(|idx| self.hittables[idx].try_hit(ray, &t_interval, ray_info))
                 .flatten()
                 .min_by(|a, b| a.t.total_cmp(&b.t));
         }
 
-        if node.aabb.hit(ray, t_interval) {
+        if node.aabb.hit(ray, &t_interval) {
             let left_idx = node.first;
             let right_idx = node.first + 1;
 
@@ -509,7 +509,7 @@ impl BVHMesh {
     }
 
     // TODO: This is still bugged.
-    pub fn try_hit_it_ordered(&self, ray: &Ray, t_interval: Interval) -> BVHQueryResult {
+    pub fn try_hit_it_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
         // Can abort right away if the root AABB is not hit.
         if !self.nodes[0].aabb.hit(ray, t_interval) {
             return BVHQueryResult {
@@ -604,7 +604,7 @@ impl BVHMesh {
         };
     }
 
-    pub fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> BVHQueryResult {
+    pub fn try_hit_it(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
         // Query metrics
         let mut num_aabb_intersects = 0;
         let mut num_aabb_checks = 0;
@@ -677,7 +677,7 @@ impl BVHMesh {
         }
     }
 
-    fn try_hit_rec(&self, ray: &Ray, t_interval: Interval, bvh_idx: u32) -> Option<(u32, Float)> {
+    fn try_hit_rec(&self, ray: &Ray, t_interval: &Interval, bvh_idx: u32) -> Option<(u32, Float)> {
         // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];
 
@@ -732,7 +732,7 @@ impl HittableTrait for BVHMesh {
         self.nodes[0].aabb.clone()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         if let BVHQueryResult {
             primitive_index: Some(primitive_idx),
             hit_t: Some(t_hit),

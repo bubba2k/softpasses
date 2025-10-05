@@ -132,7 +132,7 @@ impl RenderPipeline<3> for DefaultPipeline {
             if let Some(hit) =
                 world
                     .objects_bvh
-                    .try_hit(&current_ray, settings.ray_limits, ray_info)
+                    .try_hit(&current_ray, &settings.ray_limits, ray_info)
             {
                 // The albedo and normal are computed exactly ONCE on the very first bounce.
                 if bounce_counter == 0 {
@@ -259,7 +259,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
                 None
             }
         }) {
-            let query_result = mesh.try_hit_it(ray, settings.ray_limits);
+            let query_result = mesh.try_hit_it(ray, &settings.ray_limits);
             passes[0] = query_result.num_aabb_hits;
             passes[1] = query_result.num_aabb_checks;
             passes[2] = query_result.num_primitve_checks;
@@ -410,6 +410,7 @@ pub trait Scheduler {
         // Render the entire image once at 1 spp, then extrapolate the full render time from that.
         let estimate_settings = RenderSettings {
             samples_per_pixel: 1,
+            ray_limits: settings.ray_limits.clone(),
             ..*settings
         };
         let estimate_start = std::time::Instant::now();

@@ -71,7 +71,7 @@ impl<'a> HitRecord {
 pub trait HittableTrait {
     // The meat and bones. Detect hits from rays.
     // num_bounces: How many time this ray has bounced already.
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord>;
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord>;
 
     fn get_aabb(&self) -> AABoundingBox;
 
@@ -166,7 +166,7 @@ impl HittableTrait for Hittable {
         }
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         match self {
             Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval, ray_info),
             Hittable::Parallelepiped(parallelepiped) => {
@@ -239,9 +239,9 @@ impl AABoundingBox {
     }
 
     // Ray-box intersection using slabs method
-    pub fn hit(&self, ray: &Ray, t_interval: Interval) -> bool {
-        let mut tmin = t_interval.min;
-        let mut tmax = t_interval.max;
+    pub fn hit(&self, ray: &Ray, t_interval: &Interval) -> bool {
+        let mut tmin = *t_interval.start();
+        let mut tmax = *t_interval.end();
 
         for i in 0..3 {
             let inv_d = ray.inv_dir[i];
@@ -260,9 +260,9 @@ impl AABoundingBox {
         true
     }
 
-    pub fn dist(&self, ray: &Ray, t_interval: Interval) -> Option<Float> {
-        let mut tmin = t_interval.min;
-        let mut tmax = t_interval.max;
+    pub fn dist(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
+        let mut tmin = *t_interval.start();
+        let mut tmax = *t_interval.end();
 
         for i in 0..3 {
             let inv_d = ray.inv_dir[i];
@@ -301,7 +301,7 @@ impl HittableList {
 }
 
 impl HittableTrait for HittableList {
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Abort if the ray does not hit this lists bounding box (TODO: This seems to worsen performance,
         // so it is turned off for now.)
         // if !self.aabb.hit(ray, t_interval)  { return None; }
@@ -353,9 +353,9 @@ impl Transformable for Sphere {
 }
 
 impl HittableTrait for Sphere {
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
-            if t_interval.contains(t_hit) {
+            if t_interval.contains(&t_hit) {
                 let point_hit = ray.at(t_hit);
                 let sphere_normal = (point_hit - self.center) / self.radius;
 
@@ -441,7 +441,7 @@ impl Transformable for Plane {
 }
 
 impl HittableTrait for Plane {
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -449,7 +449,7 @@ impl HittableTrait for Plane {
 
         let t_intersect = (-self.normal.dot(ray.orig) + self.d) / self.normal.dot(ray.dir);
 
-        if !t_interval.contains(t_intersect) {
+        if !t_interval.contains(&t_intersect) {
             return None;
         } else {
             let p_intersect = ray.at(t_intersect);
@@ -628,7 +628,7 @@ impl HittableTrait for Parallelogram {
     // 1. Finding intersect point between ray and the plane the rect lies on
     // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
     //    then perform a 2D Point-Contains-Polygon Check
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -636,7 +636,7 @@ impl HittableTrait for Parallelogram {
 
         let t_intersect = (-self.normal.dot(ray.orig) + self.d) / self.normal.dot(ray.dir);
 
-        if !t_interval.contains(t_intersect) {
+        if !t_interval.contains(&t_intersect) {
             return None;
         } else {
             let p_intersect = ray.at(t_intersect);
@@ -724,7 +724,7 @@ impl HittableTrait for Parallelepiped {
         self.list.get_aabb()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         self.list.try_hit(ray, t_interval, ray_info)
     }
 
@@ -864,7 +864,12 @@ impl HittableTrait for Triangle {
         1
     }
 
-    fn try_hit(&self, _ray: &Ray, _t_interval: Interval, _ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(
+        &self,
+        _ray: &Ray,
+        _t_interval: &Interval,
+        _ray_info: &RayInfo,
+    ) -> Option<HitRecord> {
         // Since the triangles are used only inside BVHMesh, this should never be used.
         todo!()
     }
@@ -919,7 +924,7 @@ impl Triangle {
         }
         let t = f * edge2.dot(q);
 
-        if interval.contains(t) { Some(t) } else { None }
+        if interval.contains(&t) { Some(t) } else { None }
     }
 }
 
@@ -1047,7 +1052,7 @@ impl HittableTrait for Mesh {
         (self.aabb.max - self.aabb.min) * 0.5 + self.aabb.min
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
         // Do a simple aabb check
         if !self.aabb.hit(ray, t_interval) {
             return None;
@@ -1067,7 +1072,7 @@ impl HittableTrait for Mesh {
             .flatten()
             .min_by(|(_, t1), (_, t2)| t1.total_cmp(t2))
         {
-            if t_interval.contains(t_hit) {
+            if t_interval.contains(&t_hit) {
                 let point_hit = ray.at(t_hit);
 
                 // Interpolate normal of the triangle. First, we have to find the barycentric
