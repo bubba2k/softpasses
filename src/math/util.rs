@@ -1,41 +1,6 @@
 use crate::math::vector::{Float, Vec3f};
 
-#[derive(Clone, Copy)]
-pub struct Interval {
-    pub min: Float,
-    pub max: Float,
-}
-
-impl Interval {
-    pub const EMPTY: Self = Interval {
-        min: Float::INFINITY,
-        max: Float::NEG_INFINITY,
-    };
-    pub const UNIVERSE: Self = Interval {
-        min: Float::NEG_INFINITY,
-        max: Float::INFINITY,
-    };
-
-    pub fn new(min: Float, max: Float) -> Self {
-        Interval { min: min, max: max }
-    }
-
-    pub fn size(&self) -> Float {
-        self.max - self.min
-    }
-
-    pub fn contains(&self, x: Float) -> bool {
-        self.min <= x && x <= self.max
-    }
-
-    pub fn surrounds(&self, x: Float) -> bool {
-        self.min < x && x < self.max
-    }
-
-    pub fn clamp(&self, x: Float) -> Float {
-        x.clamp(self.min, self.max)
-    }
-}
+pub type Interval = std::ops::RangeInclusive<Float>;
 
 #[derive(Clone)]
 pub struct ImageRegion {
