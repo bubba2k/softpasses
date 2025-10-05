@@ -182,10 +182,28 @@ impl HittableTrait for Hittable {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone, Debug)]
+// TODO: What if an AABB is completely flat along an axis?
 pub struct AABoundingBox {
     pub min: Vec3f,
     pub max: Vec3f,
+}
+
+impl Default for AABoundingBox {
+    fn default() -> Self {
+        AABoundingBox {
+            min: Vec3f {
+                x: Float::INFINITY,
+                y: Float::INFINITY,
+                z: Float::INFINITY,
+            },
+            max: Vec3f {
+                x: Float::NEG_INFINITY,
+                y: Float::NEG_INFINITY,
+                z: Float::NEG_INFINITY,
+            },
+        }
+    }
 }
 
 impl AABoundingBox {
@@ -205,24 +223,19 @@ impl AABoundingBox {
             self.max.y.max(point.y),
             self.max.z.max(point.z),
         );
-
-        // Completely flat (among one of the axis) AABBs cause issues,
-        // mainly the hit impl below always returning false in that case.
-        // The simplest hack is to make sure it is never flat (unless empty) here.
-        if self.min.x == self.max.x {
-            self.max.x += 0.0001
-        }
-        if self.min.y == self.max.y {
-            self.max.y += 0.0001
-        }
-        if self.min.z == self.max.z {
-            self.max.z += 0.0001
-        }
     }
 
     pub fn expand_aabb(&mut self, aabb: &AABoundingBox) {
         self.expand(&aabb.max);
         self.expand(&aabb.min);
+    }
+
+    pub fn extent(&self) -> Vec3f {
+        if self.min.x > self.max.x || self.min.y > self.max.y || self.min.z > self.max.z {
+            glam::vec3(0.0, 0.0, 0.0)
+        } else {
+            self.max - self.min
+        }
     }
 
     // Ray-box intersection using slabs method
