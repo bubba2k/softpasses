@@ -101,16 +101,8 @@ fn _denoise(
         .collect()
 }
 
-pub fn denoise(image: &Vec<Color>, image_width: usize, image_height: usize) -> Vec<Color> {
-    _denoise(image, None, None, image_width, image_height)
-}
-
-pub fn denoise_with_albedo_normal(
-    image: &Texture,
-    albedo: &Option<Texture>,
-    normal: &Option<Texture>,
-) -> Texture {
-    let albedo_data = albedo.as_ref().map_or(None, |t: &Texture| Some(&t.data));
+pub fn denoise(image: &Texture, albedo: Option<&Texture>, normal: Option<&Texture>) -> Texture {
+    let albedo_data = albedo.map_or(None, |t: &Texture| Some(&t.data));
     let normal_data = normal.as_ref().map(|t| &t.data);
     let denoised_data = _denoise(
         &image.data,
