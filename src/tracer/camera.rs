@@ -85,6 +85,7 @@ pub struct Pose {
     pub up: Vec3f,
 }
 
+#[allow(dead_code)]
 impl Pose {
     const UP_DEFAULT: Vec3f = Vec3f::new(0.0, 1.0, 0.0);
 

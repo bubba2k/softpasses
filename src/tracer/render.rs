@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use super::material::MaterialTrait;
 use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
-use crate::math::vector::{Color, Float, Pixel, vec3_from_dvec3};
+use crate::math::vector::{Color, Float, vec3_from_dvec3};
 use crate::tracer::camera::Camera;
 use crate::tracer::hittable::{Hittable, HittableTrait, RayInfo};
 use crate::tracer::texture::Texture;
@@ -326,13 +326,6 @@ pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
     result
 }
 
-pub fn color_to_pixel(c: &Color) -> Pixel {
-    let r = util::linear_to_gamma(c[0]);
-    let g = util::linear_to_gamma(c[1]);
-    let b = util::linear_to_gamma(c[2]);
-    crate::math::vector::Pixel::new((r * 255.99) as u8, (g * 255.99) as u8, (b * 255.99) as u8)
-}
-
 #[derive(Clone)]
 pub struct RenderSettings {
     pub image_width: u32,
@@ -340,7 +333,6 @@ pub struct RenderSettings {
     pub samples_per_pixel: u32,
     pub max_bounces: u32,
     pub ray_limits: util::Interval,
-    pub denoise: bool,
 }
 
 pub struct RenderResult {

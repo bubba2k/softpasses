@@ -54,6 +54,7 @@ impl Texture {
         img.save(path).map_err(|e| e.to_string())
     }
 
+    #[allow(dead_code)]
     // Get the pixel at uv, simply truncating to the top-left-most pixel.
     pub fn query_uv_trunc(&self, u: Float, v: Float) -> Color {
         let u = u.clamp(0.0, 1.0);

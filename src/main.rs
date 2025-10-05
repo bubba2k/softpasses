@@ -16,7 +16,7 @@ use math::vector::{Float, Vec3f, vec3};
 use tracer::bvh::BVHMesh;
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
-use tracer::hittable::{Hittable, Mesh, Parallelepiped, Plane, Sphere};
+use tracer::hittable::{Hittable, Parallelepiped, Plane, Sphere};
 #[allow(unused_imports)]
 use tracer::material::{
     MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
@@ -47,7 +47,6 @@ fn main() -> Result<(), String> {
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
-        denoise: true,
     };
 
     let postproc_settings = PostProcessSettings { denoise: true };

@@ -16,6 +16,7 @@ struct BVHNode {
 }
 
 // Simplest way to split
+#[allow(dead_code)]
 fn simple_midpoint_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
     let extent = node.aabb.extent();
     let longest_axis = if extent.x > extent.y && extent.x > extent.z {
@@ -493,7 +494,7 @@ impl Transformable for BVHMesh {
 
 impl BVHMesh {
     pub fn from_obj_file(path: &Path, material: Material) -> Hittable {
-        let triangles = super::hittable::load_obj(path);
+        let triangles = crate::io::mesh::load_obj(path);
         let bvh_mesh = Self::new(triangles, material);
         Hittable::BVHMesh(bvh_mesh)
     }
@@ -509,6 +510,7 @@ impl BVHMesh {
     }
 
     // TODO: This is still bugged.
+    #[allow(dead_code)]
     pub fn try_hit_it_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
         // Can abort right away if the root AABB is not hit.
         if !self.nodes[0].aabb.hit(ray, t_interval) {
@@ -677,6 +679,7 @@ impl BVHMesh {
         }
     }
 
+    #[allow(dead_code)]
     fn try_hit_rec(&self, ray: &Ray, t_interval: &Interval, bvh_idx: u32) -> Option<(u32, Float)> {
         // Traverse the bvh
         let node = &self.nodes[bvh_idx as usize];

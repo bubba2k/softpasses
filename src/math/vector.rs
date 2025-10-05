@@ -6,7 +6,6 @@ pub type Float = f32;
 pub type Vec3f = glam::Vec3;
 
 pub type Color = Vec3f;
-pub type Pixel = glam::U8Vec3;
 
 pub const PLANE_XY: Vec3f = Vec3f::new(0.0, 0.0, 1.0);
 pub const PLANE_XZ: Vec3f = Vec3f::new(0.0, 1.0, 0.0);
