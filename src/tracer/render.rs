@@ -8,7 +8,6 @@ use super::material::MaterialTrait;
 use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float, Pixel, vec3_from_dvec3};
-use crate::tracer::bvh::BVHMesh;
 use crate::tracer::camera::Camera;
 use crate::tracer::hittable::{Hittable, HittableTrait, RayInfo};
 use crate::tracer::texture::Texture;
@@ -245,7 +244,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        ray_info: &RayInfo,
+        _ray_info: &RayInfo,
     ) -> [Color; 3] {
         let mut passes: [u32; 3] = [0, 0, 0];
         // Remember:

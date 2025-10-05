@@ -608,7 +608,6 @@ impl BVHMesh {
         // Query metrics
         let mut num_aabb_intersects = 0;
         let mut num_aabb_checks = 0;
-        let mut num_primitive_checks = 0;
 
         // Keep track of the nodes to discover here (DFS)
         let mut to_discover = Vec::<usize>::new();
@@ -657,7 +656,7 @@ impl BVHMesh {
             .flatten()
             .min_by(|a, b| a.1.total_cmp(&b.1));
 
-        num_primitive_checks = visited_leaf_nodes.iter().map(|node| node.num_prims).sum();
+        let num_primitive_checks = visited_leaf_nodes.iter().map(|node| node.num_prims).sum();
 
         if let Some((prim_idx, t_hit)) = closest_hit {
             BVHQueryResult {
