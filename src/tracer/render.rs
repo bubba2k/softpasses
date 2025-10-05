@@ -417,9 +417,7 @@ pub trait Scheduler {
 
         // This should give a rough estimation.
         let elapsed = estimate_start.elapsed().as_secs_f64() as f64;
-        let estimate_duration = elapsed as f64
-                                   * settings.samples_per_pixel as f64 // Attenuate for actual spp value of full render pass
-                                   + (settings.denoise as i32 as f64) * elapsed * 16.0; // Add estimated time for albedo/normal passes, if necessary.
+        let estimate_duration = elapsed as f64 * settings.samples_per_pixel as f64; // Attenuate for actual spp value of full render pass
         let estimate_hours = estimate_duration as u32 / 3600;
         let estimate_minutes = (estimate_duration as u32 / 60) % 60;
         let estimate_seconds = estimate_duration as u32 % 60;
