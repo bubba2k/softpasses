@@ -307,12 +307,7 @@ pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
                     .viewport
                     .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
-                let ray_info = RayInfo {
-                    num_aabb_intersects: 0,
-                    num_bounces: 0,
-                    num_aabb_checks: 0,
-                    num_primitive_checks: 0,
-                };
+                let ray_info = RayInfo { num_bounces: 0 };
 
                 renderpass.accumulate_sample(&ray, &settings, &world, &ray_info);
             }

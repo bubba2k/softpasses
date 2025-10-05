@@ -739,9 +739,7 @@ impl HittableTrait for BVHMesh {
         if let BVHQueryResult {
             primitive_index: Some(primitive_idx),
             hit_t: Some(t_hit),
-            num_aabb_checks,
-            num_aabb_hits,
-            num_primitve_checks,
+            ..
         } = Self::try_hit_it(&self, ray, t_interval)
         {
             let point_hit = ray.at(t_hit);
@@ -775,9 +773,6 @@ impl HittableTrait for BVHMesh {
                 ray_info.num_bounces,
                 &self.material,
                 obj_normal,
-                num_aabb_hits,
-                num_aabb_checks,
-                num_primitve_checks,
             ))
         } else {
             None
