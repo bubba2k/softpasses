@@ -15,6 +15,35 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
+// Simplest way to split
+fn simple_midpoint_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
+    let extent = node.aabb.extent();
+    let longest_axis = if extent.x > extent.y && extent.x > extent.z {
+        0
+    } else if extent.y > extent.z {
+        1
+    } else {
+        2
+    };
+    let split_pos = (node.aabb.min[longest_axis] + node.aabb.max[longest_axis]) * 0.5;
+
+    // Find the primitive centroid that is closest to the lowest split previously computed.
+    // Otherwise, a split might not actually split at all!
+    let prim_indices = (node.first as usize)..((node.first + node.num_prims) as usize);
+    let actual_pos = primitives[prim_indices]
+        .iter()
+        .map(|prim| prim.centroid()[longest_axis as usize])
+        .min_by(|a, b| {
+            let diff_a = (split_pos - a).abs();
+            let diff_b = (split_pos - b).abs();
+
+            diff_a.total_cmp(&diff_b)
+        })
+        .expect("Attempted to find best split on empty node");
+
+    (longest_axis as u32, actual_pos)
+}
+
 fn eval_sah<T: HittableTrait>(
     node: &BVHNode,
     primitives: &Vec<T>,
@@ -37,20 +66,24 @@ fn eval_sah<T: HittableTrait>(
     }
 
     let aabb_area = |aabb: &AABoundingBox| {
-        let extent = aabb.max - aabb.min;
+        let extent = aabb.extent();
+        // Due to the way AABBounding::default() is implemented, an empty AABB
+        // would reach from Vec3(INF) to Vec3(-INF). Check and catch that here.
         let area =
             2.0 * extent[0] * extent[1] + 2.0 * extent[0] * extent[2] + 2.0 * extent[1] * extent[2];
         area
     };
 
-    (left_count as f32) * aabb_area(&aabb_left) + (right_count as f32) * aabb_area(&aabb_right)
+    let sah_value =
+        (left_count as f32) * aabb_area(&aabb_left) + (right_count as f32) * aabb_area(&aabb_right);
+    sah_value
 }
 
 // Compute lowest cost axis and position along it to split
 fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
     // Check a certain selection of candidate split positions here
     let num_positions = 100;
-    let node_extent = node.aabb.max - node.aabb.min;
+    let node_extent = node.aabb.extent();
     let split_candidates: Vec<(u32, Float)> = (0..3)
         .map(|axis: u32| {
             let axis_extent = node_extent[axis as usize];
@@ -100,24 +133,25 @@ fn subdivide<T: HittableTrait>(
     bvh_node_index: u32,
     next_free_index: &mut u32,
 ) {
-    // Always split along longest axis for now
     let node = &mut bvh_nodes[bvh_node_index as usize];
 
     // At the begin of a node split, the `first` member always points to the first primitive contained by the node.
-    // -> The node is currently still treated as a leaf.
+    // -> The node is currently still "treated as a leaf". We only split
     let begin = node.first as usize;
     let end = (node.first + node.num_prims) as usize;
+    // First things first: build this nodes AABB.
     for tri in primitives[begin..end].iter() {
         node.aabb.expand_aabb(&tri.get_aabb());
     }
 
+    // Determine the axis and the point on it to split
+    // axis 0 -> x, 1 -> y, 2 -> z
     let (axis, split_value) = best_split(node, primitives);
 
     // Sort to the left and right of split value
     let mut i = node.first;
     let mut j = i + node.num_prims - 1;
     while i < j + 1 {
-        // For now, we use the first corner of each triangle as the centroid
         if primitives[i as usize].centroid()[axis as usize] < split_value {
             i += 1;
         } else {
@@ -125,6 +159,7 @@ fn subdivide<T: HittableTrait>(
             j -= 1;
         }
     }
+
     // Initialize the two children nodes and go on to subidivide them
     let left_idx = *next_free_index;
     *next_free_index += 1;
@@ -348,7 +383,7 @@ fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
 
 #[derive(Clone)]
 pub struct BVH<T: HittableTrait> {
-    hittables: Vec<T>,
+    pub hittables: Vec<T>,
     nodes: Vec<BVHNode>,
 }
 
@@ -426,8 +461,8 @@ pub struct BVHMesh {
 }
 
 pub struct BVHQueryResult {
-    pub primitive_index: u32,
-    pub hit_t: Float,
+    pub primitive_index: Option<u32>,
+    pub hit_t: Option<Float>,
     pub num_aabb_checks: u32,
     pub num_aabb_hits: u32,
     pub num_primitve_checks: u32,
@@ -473,10 +508,17 @@ impl BVHMesh {
         }
     }
 
-    fn try_hit_it_ordered(&self, ray: &Ray, t_interval: Interval) -> Option<BVHQueryResult> {
+    // TODO: This is still bugged.
+    pub fn try_hit_it_ordered(&self, ray: &Ray, t_interval: Interval) -> BVHQueryResult {
         // Can abort right away if the root AABB is not hit.
         if !self.nodes[0].aabb.hit(ray, t_interval) {
-            return None;
+            return BVHQueryResult {
+                num_aabb_checks: 1,
+                num_aabb_hits: 0,
+                num_primitve_checks: 0,
+                primitive_index: None,
+                hit_t: None,
+            };
         }
 
         // Keep track of the nodes to discover here (DFS)
@@ -511,13 +553,13 @@ impl BVHMesh {
                     .flatten()
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                 {
-                    return Some(BVHQueryResult {
-                        primitive_index: closest_hit.0,
-                        hit_t: closest_hit.1,
+                    return BVHQueryResult {
+                        primitive_index: Some(closest_hit.0),
+                        hit_t: Some(closest_hit.1),
                         num_aabb_checks: num_aabb_checks,
                         num_aabb_hits: num_aabb_intersects,
                         num_primitve_checks: num_primitive_checks,
-                    });
+                    };
                 }
             } else {
                 // Node is interior, check whether we care about its children
@@ -553,10 +595,16 @@ impl BVHMesh {
             }
         }
 
-        None
+        return BVHQueryResult {
+            primitive_index: None,
+            hit_t: None,
+            num_aabb_checks: num_aabb_checks,
+            num_aabb_hits: num_aabb_intersects,
+            num_primitve_checks: num_primitive_checks,
+        };
     }
 
-    fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> Option<BVHQueryResult> {
+    pub fn try_hit_it(&self, ray: &Ray, t_interval: Interval) -> BVHQueryResult {
         // Query metrics
         let mut num_aabb_intersects = 0;
         let mut num_aabb_checks = 0;
@@ -612,15 +660,21 @@ impl BVHMesh {
         num_primitive_checks = visited_leaf_nodes.iter().map(|node| node.num_prims).sum();
 
         if let Some((prim_idx, t_hit)) = closest_hit {
-            Some(BVHQueryResult {
-                primitive_index: prim_idx,
-                hit_t: t_hit,
+            BVHQueryResult {
+                primitive_index: Some(prim_idx),
+                hit_t: Some(t_hit),
                 num_aabb_checks: num_aabb_checks,
-                num_aabb_hits: num_aabb_checks,
+                num_aabb_hits: num_aabb_intersects,
                 num_primitve_checks: num_primitive_checks,
-            })
+            }
         } else {
-            None
+            BVHQueryResult {
+                primitive_index: None,
+                hit_t: None,
+                num_aabb_checks: num_aabb_checks,
+                num_aabb_hits: num_aabb_intersects,
+                num_primitve_checks: num_primitive_checks,
+            }
         }
     }
 
@@ -680,21 +734,21 @@ impl HittableTrait for BVHMesh {
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: Interval, ray_info: &RayInfo) -> Option<HitRecord> {
-        if let Some(BVHQueryResult {
-            primitive_index,
-            hit_t: t_hit,
+        if let BVHQueryResult {
+            primitive_index: Some(primitive_idx),
+            hit_t: Some(t_hit),
             num_aabb_checks,
             num_aabb_hits,
             num_primitve_checks,
-        }) = Self::try_hit_it(&self, ray, t_interval)
+        } = Self::try_hit_it(&self, ray, t_interval)
         {
             let point_hit = ray.at(t_hit);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
             // coordinates, u, v, w.
-            let a = self.triangles[primitive_index as usize].positions[0];
-            let b = self.triangles[primitive_index as usize].positions[1];
-            let c = self.triangles[primitive_index as usize].positions[2];
+            let a = self.triangles[primitive_idx as usize].positions[0];
+            let b = self.triangles[primitive_idx as usize].positions[1];
+            let c = self.triangles[primitive_idx as usize].positions[2];
             let v0 = b - a;
             let v1 = c - a;
             let v2 = point_hit - a;
@@ -708,9 +762,9 @@ impl HittableTrait for BVHMesh {
             let w = (d00 * d21 - d01 * d20) / denom;
             let u = 1.0 - v - w;
             // Now interpolate between the three corners.
-            let obj_normal = (self.triangles[primitive_index as usize].normals[0] * u
-                + self.triangles[primitive_index as usize].normals[1] * v
-                + self.triangles[primitive_index as usize].normals[2] * w)
+            let obj_normal = (self.triangles[primitive_idx as usize].normals[0] * u
+                + self.triangles[primitive_idx as usize].normals[1] * v
+                + self.triangles[primitive_idx as usize].normals[2] * w)
                 .normalize();
             Some(HitRecord::new(
                 &ray.step(0.01),

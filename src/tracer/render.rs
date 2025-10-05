@@ -8,8 +8,9 @@ use super::material::MaterialTrait;
 use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float, Pixel, vec3_from_dvec3};
+use crate::tracer::bvh::BVHMesh;
 use crate::tracer::camera::Camera;
-use crate::tracer::hittable::{HittableTrait, RayInfo};
+use crate::tracer::hittable::{Hittable, HittableTrait, RayInfo};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
 use std::collections::HashMap;
@@ -246,19 +247,23 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         world: &World,
         ray_info: &RayInfo,
     ) -> [Color; 3] {
-        let mut passes: [usize; 3] = [0, 0, 0];
+        let mut passes: [u32; 3] = [0, 0, 0];
         // Remember:
         // 0: "num_aabb_intersects",
         // 1: "num_aabb_checks",
         // 2: "num_primitive_checks",
 
-        if let Some(hit_record) = world
-            .objects_bvh
-            .try_hit(ray, settings.ray_limits, ray_info)
-        {
-            passes[0] += hit_record.num_aabb_intersects as usize;
-            passes[1] += hit_record.num_aabb_checks as usize;
-            passes[2] += hit_record.num_primitive_checks as usize;
+        for mesh in world.objects_bvh.hittables.iter().flat_map(|e| {
+            if let Hittable::BVHMesh(mesh) = e {
+                Some(mesh)
+            } else {
+                None
+            }
+        }) {
+            let query_result = mesh.try_hit_it(ray, settings.ray_limits);
+            passes[0] = query_result.num_aabb_hits;
+            passes[1] = query_result.num_aabb_checks;
+            passes[2] = query_result.num_primitve_checks;
         }
 
         let mut res: [Color; 3] = array::from_fn(|_| Color::default());
