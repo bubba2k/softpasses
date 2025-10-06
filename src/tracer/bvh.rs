@@ -511,7 +511,7 @@ impl BVHMesh {
 
     // TODO: This is still bugged.
     #[allow(dead_code)]
-    pub fn try_hit_it_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
+    pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
         // Can abort right away if the root AABB is not hit.
         if !self.nodes[0].aabb.hit(ray, t_interval) {
             return BVHQueryResult {
@@ -525,6 +525,9 @@ impl BVHMesh {
 
         // Keep track of the nodes to discover here (DFS)
         let mut to_discover = Vec::<usize>::new();
+        // The closest primitive hit found so far
+        let mut best_t = Float::INFINITY;
+        let mut best_prim_idx: u32 = 0;
 
         let mut num_aabb_intersects = 0;
         let mut num_aabb_checks = 0;
@@ -535,6 +538,11 @@ impl BVHMesh {
         while to_discover.len() != 0 {
             // Traverse the bvh
             let node = &self.nodes[to_discover.pop().unwrap()];
+
+            // If this nodes is *behind* the currently best t, we do not need to check it further.
+            if node.aabb.dist(ray, t_interval).unwrap() > best_t {
+                continue;
+            }
 
             // A node is a leaf if it contains more than 0 prims
             if node.num_prims > 0 {
@@ -555,13 +563,10 @@ impl BVHMesh {
                     .flatten()
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                 {
-                    return BVHQueryResult {
-                        primitive_index: Some(closest_hit.0),
-                        hit_t: Some(closest_hit.1),
-                        num_aabb_checks: num_aabb_checks,
-                        num_aabb_hits: num_aabb_intersects,
-                        num_primitve_checks: num_primitive_checks,
-                    };
+                    if closest_hit.1 < best_t {
+                        best_t = closest_hit.1;
+                        best_prim_idx = closest_hit.0;
+                    }
                 }
             } else {
                 // Node is interior, check whether we care about its children
@@ -598,15 +603,23 @@ impl BVHMesh {
         }
 
         return BVHQueryResult {
-            primitive_index: None,
-            hit_t: None,
+            primitive_index: if best_t != Float::INFINITY {
+                Some(best_prim_idx)
+            } else {
+                None
+            },
+            hit_t: if best_t != Float::INFINITY {
+                Some(best_t)
+            } else {
+                None
+            },
             num_aabb_checks: num_aabb_checks,
             num_aabb_hits: num_aabb_intersects,
             num_primitve_checks: num_primitive_checks,
         };
     }
 
-    pub fn try_hit_it(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
+    pub fn try_hit_unordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
         // Query metrics
         let mut num_aabb_intersects = 0;
         let mut num_aabb_checks = 0;
@@ -678,52 +691,6 @@ impl BVHMesh {
             }
         }
     }
-
-    #[allow(dead_code)]
-    fn try_hit_rec(&self, ray: &Ray, t_interval: &Interval, bvh_idx: u32) -> Option<(u32, Float)> {
-        // Traverse the bvh
-        let node = &self.nodes[bvh_idx as usize];
-
-        // A node is a leaf if it has primitives
-        if node.num_prims != 0 {
-            // eprintln!("Hit primitve at {}", bvh_idx);
-            let range = (node.first as usize)..(node.first as usize + node.num_prims as usize);
-            return range
-                .map(|idx| (idx as u32, &self.triangles[idx]))
-                .map(|(idx, tri)| {
-                    if let Some(t_hit) = tri.ray_intersection(ray, &t_interval) {
-                        Some((idx, t_hit))
-                    } else {
-                        None
-                    }
-                })
-                .flatten()
-                .min_by(|a, b| a.1.total_cmp(&b.1));
-        }
-
-        if node.aabb.hit(ray, t_interval) {
-            let left_idx = node.first;
-            let right_idx = node.first + 1;
-
-            match (
-                Self::try_hit_rec(&self, ray, t_interval, left_idx),
-                Self::try_hit_rec(&self, ray, t_interval, right_idx),
-            ) {
-                (Some(res1), Some(res2)) => {
-                    if res1.1 < res2.1 {
-                        Some(res1)
-                    } else {
-                        Some(res2)
-                    }
-                }
-                (Some(t1), None) => Some(t1),
-                (None, Some(t2)) => Some(t2),
-                _ => None,
-            }
-        } else {
-            None
-        }
-    }
 }
 
 impl HittableTrait for BVHMesh {
@@ -740,7 +707,7 @@ impl HittableTrait for BVHMesh {
             primitive_index: Some(primitive_idx),
             hit_t: Some(t_hit),
             ..
-        } = Self::try_hit_it(&self, ray, t_interval)
+        } = Self::try_hit_ordered(&self, ray, t_interval)
         {
             let point_hit = ray.at(t_hit);
 
