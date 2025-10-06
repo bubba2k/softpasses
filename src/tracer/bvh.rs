@@ -4,6 +4,7 @@ use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::{Float, Vec3f};
 use crate::{Transform, Transformable};
+use std::array;
 use std::path::Path;
 
 #[derive(Default, Clone)]
@@ -454,6 +455,37 @@ impl<T: HittableTrait> BVH<T> {
     }
 }
 
+// A statically sized stack that lives in stack memory instead of heap
+struct StaticStack<T: Copy, const N: usize> {
+    data: [T; N],
+    stack_ptr: usize,
+}
+
+impl<T: Copy, const N: usize> StaticStack<T, N> {
+    fn new(fill: T) -> Self {
+        StaticStack {
+            stack_ptr: 0,
+            // TODO: It could have a slight performance advantage to leave
+            // the data uninitialized. Would require unsafe code.
+            data: array::from_fn(|_| fill),
+        }
+    }
+
+    fn push(&mut self, value: T) {
+        self.data[self.stack_ptr] = value;
+        self.stack_ptr += 1;
+    }
+
+    fn pop(&mut self) -> Option<T> {
+        if self.stack_ptr == 0 {
+            None
+        } else {
+            self.stack_ptr -= 1;
+            Some(self.data[self.stack_ptr])
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct BVHMesh {
     triangles: Vec<Triangle>,
@@ -466,7 +498,7 @@ pub struct BVHQueryResult {
     pub hit_t: Option<Float>,
     pub num_aabb_checks: u32,
     pub num_aabb_hits: u32,
-    pub num_primitve_checks: u32,
+    pub num_primitive_checks: u32,
 }
 
 impl Transformable for BVHMesh {
@@ -509,13 +541,14 @@ impl BVHMesh {
         }
     }
 
-    // TODO: This is still bugged.
-    #[allow(dead_code)]
     pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
         // Keep track of the nodes to discover here (DFS)
         // Try to preallocate a reasonably sized stack. Inside the stack, we save the near distance of
         // the aabb to the ray, and its index of course.
-        let mut to_discover = Vec::<(usize, Float)>::with_capacity(64);
+        // We use a statically sized stack here. This could cause some very mean issues
+        // if the number of nodes we yet have to discover exceeds the capacity.
+        // 64 cap should serve us well for now.
+        let mut to_discover = StaticStack::<(usize, Float), 64>::new((0, 0.0));
         // The closest primitive hit found so far
         let mut best_t = Float::INFINITY;
         let mut best_prim_idx: u32 = 0;
@@ -533,9 +566,8 @@ impl BVHMesh {
         } else {
             num_aabb_checks += 1;
         }
-        while to_discover.len() != 0 {
+        while let Some((node_idx, node_dist)) = to_discover.pop() {
             // Traverse the bvh
-            let (node_idx, node_dist) = to_discover.pop().unwrap();
 
             // If this nodes is *behind* the currently best t, we do not need to check it further.
             if node_dist > best_t {
@@ -615,7 +647,7 @@ impl BVHMesh {
             },
             num_aabb_checks: num_aabb_checks,
             num_aabb_hits: num_aabb_intersects,
-            num_primitve_checks: num_primitive_checks,
+            num_primitive_checks,
         };
     }
 
@@ -679,7 +711,7 @@ impl BVHMesh {
                 hit_t: Some(t_hit),
                 num_aabb_checks: num_aabb_checks,
                 num_aabb_hits: num_aabb_intersects,
-                num_primitve_checks: num_primitive_checks,
+                num_primitive_checks,
             }
         } else {
             BVHQueryResult {
@@ -687,7 +719,7 @@ impl BVHMesh {
                 hit_t: None,
                 num_aabb_checks: num_aabb_checks,
                 num_aabb_hits: num_aabb_intersects,
-                num_primitve_checks: num_primitive_checks,
+                num_primitive_checks,
             }
         }
     }

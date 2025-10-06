@@ -262,7 +262,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
             let query_result = mesh.try_hit_ordered(ray, &settings.ray_limits);
             passes[0] = query_result.num_aabb_hits;
             passes[1] = query_result.num_aabb_checks;
-            passes[2] = query_result.num_primitve_checks;
+            passes[2] = query_result.num_primitive_checks;
         }
 
         let mut res: [Color; 3] = array::from_fn(|_| Color::default());
