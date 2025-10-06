@@ -512,19 +512,10 @@ impl BVHMesh {
     // TODO: This is still bugged.
     #[allow(dead_code)]
     pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
-        // Can abort right away if the root AABB is not hit.
-        if !self.nodes[0].aabb.hit(ray, t_interval) {
-            return BVHQueryResult {
-                num_aabb_checks: 1,
-                num_aabb_hits: 0,
-                num_primitve_checks: 0,
-                primitive_index: None,
-                hit_t: None,
-            };
-        }
-
         // Keep track of the nodes to discover here (DFS)
-        let mut to_discover = Vec::<usize>::new();
+        // Try to preallocate a reasonably sized stack. Inside the stack, we save the near distance of
+        // the aabb to the ray, and its index of course.
+        let mut to_discover = Vec::<(usize, Float)>::with_capacity(64);
         // The closest primitive hit found so far
         let mut best_t = Float::INFINITY;
         let mut best_prim_idx: u32 = 0;
@@ -533,16 +524,25 @@ impl BVHMesh {
         let mut num_aabb_checks = 0;
         let mut num_primitive_checks = 0;
 
-        // Start at root node
-        to_discover.push(0);
+        // Start at the root node. We only push it on the stack if it is actually hit,
+        // otherwise the algorithm just terminates right away.
+        if let Some(dist) = self.nodes[0].aabb.dist(ray, t_interval) {
+            num_aabb_checks += 1;
+            num_aabb_intersects += 1;
+            to_discover.push((0, dist));
+        } else {
+            num_aabb_checks += 1;
+        }
         while to_discover.len() != 0 {
             // Traverse the bvh
-            let node = &self.nodes[to_discover.pop().unwrap()];
+            let (node_idx, node_dist) = to_discover.pop().unwrap();
 
             // If this nodes is *behind* the currently best t, we do not need to check it further.
-            if node.aabb.dist(ray, t_interval).unwrap() > best_t {
+            if node_dist > best_t {
                 continue;
             }
+
+            let node = &self.nodes[node_idx];
 
             // A node is a leaf if it contains more than 0 prims
             if node.num_prims > 0 {
@@ -579,23 +579,23 @@ impl BVHMesh {
                     self.nodes[b].aabb.dist(ray, t_interval),
                 ) {
                     (None, None) => {}
-                    (None, Some(_dist_b)) => {
-                        to_discover.push(b);
+                    (None, Some(dist_b)) => {
+                        to_discover.push((b, dist_b));
                         num_aabb_intersects += 1;
                     }
-                    (Some(_dist_a), None) => {
-                        to_discover.push(a);
+                    (Some(dist_a), None) => {
+                        to_discover.push((a, dist_a));
                         num_aabb_intersects += 1;
                     }
                     (Some(dist_a), Some(dist_b)) => {
                         num_aabb_intersects += 2;
 
                         if dist_a < dist_b {
-                            to_discover.push(b);
-                            to_discover.push(a);
+                            to_discover.push((b, dist_b));
+                            to_discover.push((a, dist_a));
                         } else {
-                            to_discover.push(a);
-                            to_discover.push(b);
+                            to_discover.push((a, dist_a));
+                            to_discover.push((b, dist_b));
                         }
                     }
                 };
