@@ -4,4 +4,5 @@ then
 	exit
 fi
 
-cargo run --release $1 && gimp ${1}/* & 2> /dev/null
+cargo run --release $1
+gimp ${1}/* & 2> /dev/null
