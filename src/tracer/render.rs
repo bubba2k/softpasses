@@ -343,14 +343,16 @@ pub struct RenderResult {
 impl std::fmt::Display for RenderResult {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let total_samples = self.image_height * self.image_width * self.num_samples;
+        let krays_per_sec = (total_samples as f32 / self.time_elapsed) as f32 / 1000.0;
         write!(
             f,
-            "RenderTimeSec\t{}\nWidth\t{}\nHeight\t{}\nSamplesPerPx\t{}\nTotalSamples\t{}\nMaxRayBounces\t{}\nObjects\t{}",
+            "RenderTimeSec\t{}\nWidth\t\t{}\nHeight\t\t{}\nSamplesPerPx\t{}\nTotalSamples\t{}\nkRays/s\t\t{}\nMaxRayBounces\t{}\nPrimitives\t{}",
             self.time_elapsed,
             self.image_width,
             self.image_height,
             self.num_samples,
             total_samples,
+            krays_per_sec,
             self.max_bounces,
             self.num_objects
         )
@@ -373,6 +375,27 @@ impl RenderResult {
             let mut full_path = std::path::PathBuf::from(base_dir);
             full_path.push(file_name);
             pass_texture.write_32f(full_path.as_path())?;
+        }
+
+        Ok(())
+    }
+
+    // Dump render information (spp, number of primitives, etc to a txt)
+    pub fn dump_info(&self, base_dir: &std::path::Path) -> Result<(), String> {
+        // Attempt to create the directory if it doesn't exist
+        if let Err(e) = std::fs::create_dir_all(base_dir) {
+            return Err(format!("Failed to create directory {:?}: {}", base_dir, e));
+        }
+
+        let render_info_string = self.to_string() + "\n";
+
+        let mut info_path = base_dir.to_path_buf();
+        info_path.push("renderstats.txt");
+        if let Err(e) = std::fs::write(&info_path, render_info_string) {
+            return Err(format!(
+                "Failed to write render stats to {:?}: {}",
+                info_path, e
+            ));
         }
 
         Ok(())
