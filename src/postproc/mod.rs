@@ -86,5 +86,27 @@ pub fn postprocess(
         image_map.insert(String::from("aabb_checks_heatmapped"), aabb_checks_heatmap);
     }
 
+    if let Some(pass) = render_result.passes.get("num_primitve_checks") {
+        let max_value = pass
+            .data
+            .iter()
+            .map(|v| v.x)
+            .max_by(f32::total_cmp)
+            .unwrap();
+        let primitive_checks_heatmap = Texture::from_raw(
+            pass.width,
+            pass.height,
+            pass.data
+                .iter()
+                .map(|color| tonemap::gamma_correct(&tonemap::heatmap(color.x, max_value), 2.2))
+                .collect(),
+        );
+
+        image_map.insert(
+            String::from("primitive_checks_heatmapped"),
+            primitive_checks_heatmap,
+        );
+    }
+
     PostProcessResult { images: image_map }
 }
