@@ -1,0 +1,8 @@
+RenderTimeSec	1061.5662
+Width		1920
+Height		1080
+SamplesPerPx	512
+TotalSamples	1061683200
+kRays/s		1000.1102
+MaxRayBounces	5
+Primitives	871312
