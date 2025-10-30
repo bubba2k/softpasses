@@ -37,8 +37,13 @@ impl Background {
         Background::Solid(color)
     }
 
-    pub fn from_environment_texture(texture: Texture, y_rotation: Float) -> Self {
-        Background::EnvironmentMap(texture, y_rotation)
+    pub fn from_environment_texture(texture: Texture, y_rotation: Float, exposure: Float) -> Self {
+        let attenuated_texture = Texture {
+            height: texture.height,
+            width: texture.width,
+            data: texture.data.iter().map(|color| color * exposure).collect(),
+        };
+        Background::EnvironmentMap(attenuated_texture, y_rotation)
     }
 
     pub fn sample(&self, dir: Vec3f) -> Color {
