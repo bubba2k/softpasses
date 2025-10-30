@@ -1,13 +1,12 @@
 # Softpasses
 
-Offline software pathtracer
+Software pathtracer
 
 ## Current features
 
 - Support for multiple types of primitives (Spheres, Triangles, Parallelograms, Parallelipeds)
 - Handrolled BVH2 implementation (SAH construction, ordered traversal)
 - Triangle mesh loading (.obj format)
-- Mesh transformations: Scaling, Rotation, Translation
 - Materials: Lambertian diffuse BRDF, basic glass BSDF and metallic BRDF
 - Environment map defined lighting (.hdr, .exr)
 - Generation of auxiliary passes (albedo, normal) for denoising
@@ -68,16 +67,16 @@ There is no proper, userfriendly way to do so at the moment, but you can play ar
 
 ## References 
 
-A brilliant practical introduction to the basics of raytracing, which this software was originally loosely based on:  
+A brilliant practical introduction to the basics of raytracing, which this project was originally loosely based on:  
 [Peter Shirley - Ray Tracing in One Weekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
 
-For all your physically accurate rendering needs:
+For all your physically accurate rendering needs:  
 [Pharr, Jakob, Humphreys - Physically Based Rendering: From Theory to Implementation](https://www.pbrt.org/)
 
-A great tutorial on building BVHs:
+A great tutorial on building BVHs:  
 [Bikker - How to Build a BVH (Article series)](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
-Arguably more of historical importance, these two papers were among the first to discuss the usage of BVHs in Raytracing. Regardless, they give a good overview of the fundamental problem at hand:
+Arguably more of historical importance, these two papers were among the first to discuss the usage of BVHs in Raytracing. Regardless, they give a good overview of the fundamental problem at hand:  
 [Kay, Kajiya (1986) - Ray Tracing Complex Scenes](https://papers.cumincad.org/data/works/att/67d2.content.pdf?utm_source=chatgpt.com)
 [Goldsmith, Salmon (1987) - Automatic Creation of Object Hierarchies for Ray Tracing](https://doi.org/10.1109/MCG.1987.276983)
 
