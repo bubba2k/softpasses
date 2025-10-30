@@ -4,7 +4,11 @@ mod postproc;
 mod tracer;
 use std::path::{Path, PathBuf};
 
+use crate::math::transform;
 use crate::postproc::{PostProcessSettings, postprocess};
+use crate::tracer::bvh::BVH;
+use crate::tracer::render::RenderSettings;
+#[allow(unused_imports)]
 use crate::tracer::render::{BVHDebugPipeline, DefaultPipeline};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
@@ -23,6 +27,106 @@ use tracer::material::{
     Material, MaterialTrait,
 };
 
+fn glass_spheres_scene_setup() -> (World, Camera, RenderSettings) {
+    let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
+    let mat_glass_red_outer = MatGlass::new(vec3(0.95, 0.95, 1.0), 1.33);
+    let mat_glass_red_inner = MatGlass::new(vec3(0.95, 0.95, 1.0), 1.0 / 1.33);
+    let mat_mirror = MatPrincipled::new(vec3(0.9, 0.9, 0.9), 1.0, 0.01);
+    let mat_table = MatLambertDiffuse::new(vec3(0.18, 0.18, 0.2));
+    let mat_wall = MatLambertDiffuse::new(vec3(0.18, 0.25, 0.2));
+
+    let table = Parallelepiped::new(
+        vec3(-3.0, -1.0, -1.0),
+        vec3(2.0, -1.0, -1.0),
+        vec3(-3.0, -1.0, 1.0),
+        vec3(-3.0, 0.0, -1.0),
+        mat_table,
+    );
+
+    let right_wall = Parallelepiped::new(
+        vec3(1.0, 0.0, -1.0),
+        vec3(2.0, 0.0, -1.0),
+        vec3(1.0, 0.0, 1.0),
+        vec3(1.0, 3.0, -1.0),
+        mat_wall,
+    );
+
+    let sphere1_outer: Hittable = Sphere::new(vec3(-1.3, 0.501, -0.4), 0.5, mat_mirror);
+
+    let model1 = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), mat_glass);
+
+    let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
+    let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
+
+    let objects = vec![model1, sphere1_outer, right_wall, table];
+
+    let world = World::new(objects, background);
+
+    // Camera setup
+    let width: u32 = 1920 / 1;
+    let height: u32 = 1080 / 1;
+    let aspect_ratio: Float = width as Float / height as Float;
+
+    let render_settings = tracer::render::RenderSettings {
+        samples_per_pixel: 1024,
+        max_bounces: 10,
+        image_width: width,
+        image_height: height,
+        ray_limits: Interval::new(0.001, 1000.0),
+    };
+
+    let pose = camera::Pose::look_at(Vec3f::new(-0.25, 1.4, 5.0), Vec3f::new(-0.25, 0.5, 0.0));
+    let lens = camera::Lens::new(15, 28, aspect_ratio, 5.2, 0.25);
+
+    let camera = Camera::new(pose, lens);
+
+    return (world, camera, render_settings);
+}
+
+fn stanford_dragon_scene_setup() -> (World, Camera, RenderSettings) {
+    // World setup
+    let mat_table = MatLambertDiffuse::new(Vec3f::new(0.651, 0.541, 0.451));
+
+    let mat_metal = MatPrincipled::new(vec3(0.806, 0.351, 0.959), 0.9, 0.1);
+
+    let table = Parallelepiped::new(
+        vec3(-1.5, -1.0, -1.0),
+        vec3(1.5, -1.0, -1.0),
+        vec3(-1.5, -1.0, 1.0),
+        vec3(-1.5, 0.0, -1.0),
+        mat_table,
+    );
+
+    let object = BVHMesh::from_obj_file(Path::new("assets/models/dragon.obj"), mat_metal);
+
+    let objects = vec![object, table];
+
+    let env_texture = Texture::from_path(Path::new("assets/hdri/apartmentbalcony_4k.exr")).unwrap();
+    let background = Background::from_environment_texture(env_texture, std::f32::consts::PI, 1.0);
+
+    let world = World::new(objects, background);
+
+    // Camera setup
+    let width: u32 = 1920 / 1;
+    let height: u32 = 1080 / 1;
+    let aspect_ratio: Float = width as Float / height as Float;
+
+    let render_settings = tracer::render::RenderSettings {
+        samples_per_pixel: 64,
+        max_bounces: 6,
+        image_width: width,
+        image_height: height,
+        ray_limits: Interval::new(0.001, 1000.0),
+    };
+
+    let pose = camera::Pose::look_at(Vec3f::new(-1.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
+    let lens = camera::Lens::new(15, 32, aspect_ratio, 4.1, 0.3);
+
+    let camera = Camera::new(pose, lens);
+
+    return (world, camera, render_settings);
+}
+
 fn main() -> Result<(), String> {
     let args: Vec<String> = std::env::args().collect();
 
@@ -35,71 +139,28 @@ fn main() -> Result<(), String> {
         )))
     };
 
-    let width: u32 = 1280 / 1;
-    let height: u32 = 1024 / 1;
-    let aspect_ratio: Float = width as Float / height as Float;
+    let (world, camera, render_settings) = glass_spheres_scene_setup();
 
-    let pose = camera::Pose::look_at(Vec3f::new(-1.0, 1.4, 4.0), Vec3f::new(0.0, 0.4, 0.0));
-    let lens = camera::Lens::new(15, 35, aspect_ratio, 4.5, 0.0);
-    let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 16,
-        max_bounces: 10,
-        image_width: width,
-        image_height: height,
-        ray_limits: Interval::new(0.001, 1000.0),
-    };
-
-    let postproc_settings = PostProcessSettings { denoise: true };
-
-    let camera = Camera::new(pose, lens);
-
-    // Scene setup
-    let mat_floor = MatLambertDiffuse::new(Vec3f::new(1.0, 1.0, 1.0));
-    let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
-    let mat_inner = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.0 / 1.33);
-    let mat_metal = MatPrincipled::new(vec3(0.721, 0.32, 0.666), 1.0, 0.01);
-    let mat_rough = MatLambertDiffuse::new(vec3(0.9, 0.9, 0.9));
-    let _mat_normal_dbg = MatNormalDebug::new();
-    let _mat_face_dbg = MatFaceDebug::new();
-
-    let floor = Parallelepiped::new(
-        vec3(-1.5, -1.0, -1.0),
-        vec3(1.5, -1.0, -1.0),
-        vec3(-1.5, -1.0, 1.0),
-        vec3(-1.5, 0.0, -1.0),
-        mat_floor,
-    );
-
-    let _sphere1: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.5, mat_glass.clone());
-    let _sphere4: Hittable = Sphere::new(vec3(-1.1, 0.501, 0.0), 0.45, mat_inner);
-    let _sphere2: Hittable = Sphere::new(vec3(0.0, 0.5, 0.0), 0.5, mat_rough.clone());
-    let _sphere3: Hittable = Sphere::new(vec3(1.1, 0.5, 0.0), 0.5, mat_metal.clone());
-    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), mat_metal.clone());
-
-    let objects = vec![sponza, floor];
-
-    let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
-
-    let background = Background::from_environment_texture(env_texture, 0.0);
-
-    let world = World::new(objects, background);
+    let postproc_settings = PostProcessSettings {};
 
     let scheduler = TiledScheduler::new(64);
-
-    let debug_result =
-        scheduler.render::<BVHDebugPipeline, _>(camera.clone(), render_settings.clone(), &world);
-    let render_result = TiledScheduler::new(64).render::<DefaultPipeline, 3>(
-        camera,
-        render_settings.clone(),
-        &world,
-    );
+    let render_result =
+        scheduler.render::<DefaultPipeline, 3>(camera.clone(), render_settings.clone(), &world);
     eprintln!("{}", render_result.to_string());
-    let postproc_result = postprocess(&render_result, &postproc_settings);
+    let bvh_result =
+        scheduler.render::<BVHDebugPipeline, 3>(camera.clone(), render_settings.clone(), &world);
+    eprintln!("{}", bvh_result.to_string());
+
+    let render_postproc_result = postprocess(&render_result, &postproc_settings);
+    let bvh_postproc_result = postprocess(&bvh_result, &postproc_settings);
 
     if let Some(output_dir) = output_dir {
-        debug_result.write_images(&output_dir.as_path(), ".exr")?;
         render_result.write_images(output_dir.as_path(), ".exr")?;
-        postproc_result.write_images(output_dir.as_path())?;
+        render_result.dump_info(&output_dir)?;
+        render_postproc_result.write_images(output_dir.as_path())?;
+
+        bvh_result.write_images(output_dir.as_path(), ".exr")?;
+        bvh_postproc_result.write_images(output_dir.as_path())?;
     }
 
     Ok(())
