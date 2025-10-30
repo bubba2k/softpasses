@@ -1,4 +1,4 @@
-# Pathtracer
+# Softpasses
 
 Offline software pathtracer
 
@@ -18,7 +18,31 @@ Offline software pathtracer
 
 ## Renders
 
--- Cool pictures here --
+All images were rendered and postprocessed exclusively within this software on an i7U quadcore @ 3.1 GHz processor.
+
+1080p, 512 spp, ~870k triangles @ ~1 MRays/s in 17:45 minutes
+![Final render of the Stanford dragon with environment map lighting and DoF simulation](renders/stanford_dragon_full_001/beauty_tonemapped.png)
+
+1080p, 1024 spp, ~5k primitives @ ~0.7 MRays/s in 49:40 minutes (no denoising, tonemapping)
+![Render of Stanford bunny without denoising or tonemapping](renders/stanford_bunny_shelf_001/color.png)
+
+### Auxiliary and Intermediate passes
+During each run, Softpasses also produces and outputs a collection of auxiliary/intermediate passes.
+
+#### Color pass
+The raw computed HDR luminance data before denoising, tonemapping and gamma correction.
+![Linear HDR data of the Stanford dragon render](renders/stanford_dragon_full_001/color.png)
+
+#### Albedo and Normal passes
+ Describing the diffuse reflection and surface normal properties of the scene, they serve as common auxiliary inputs for denoisers, and are fed to the Intel OIDN library during the postprocessing stage.
+![Albedo data of the Stanford dragon scene](renders/stanford_dragon_full_001/albedo.png)
+![Surface normal data of the Stanford dragon scene](renders/stanford_dragon_full_001/normal.png)
+
+#### BVH visualization
+BVH visualization passes such as **Average number of node checks per pixel** and **Average number of primitive checks per pixel** aid in profiling and debugging the acceleration structure. Both a heatmapped (ie normalized; as seen below) and raw HDR version are supplied.
+![Average number of node AABB checks / pixel in the Stanford dragon scene](renders/stanford_dragon_full_001/aabb_checks_heatmapped.png)
+![Average number of primitve checks / pixel in the Stanford dragon scene](renders/stanford_dragon_full_001/primitive_checks_heatmapped.png)
+
 
 ## Planned features
 
@@ -53,7 +77,7 @@ For all your physically accurate rendering needs:
 A great tutorial on building BVHs:
 [Bikker - How to Build a BVH (Article series)](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)
 
-More of historical importance, these two papers were among the first to discuss the usage of BVHs in Raytracing. Regardless, they give a good overview of the basic problem at hand:
+Arguably more of historical importance, these two papers were among the first to discuss the usage of BVHs in Raytracing. Regardless, they give a good overview of the fundamental problem at hand:
 [Kay, Kajiya (1986) - Ray Tracing Complex Scenes](https://papers.cumincad.org/data/works/att/67d2.content.pdf?utm_source=chatgpt.com)
 [Goldsmith, Salmon (1987) - Automatic Creation of Object Hierarchies for Ray Tracing](https://doi.org/10.1109/MCG.1987.276983)
 
