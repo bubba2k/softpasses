@@ -60,7 +60,7 @@ Then build in release mode (debug builds are *very* slow):
 ```cargo build --release```
 
 Run the following to render the current scene:  
-```cargo run --release <output directory>```
+```cargo run --release -- <output directory>```
 
 There is no proper, user friendly way to do so at the moment, but you can play around with the scene and render settings inside `main`. 
 
