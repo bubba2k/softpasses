@@ -84,7 +84,7 @@ fn eval_sah<T: HittableTrait>(
 // Compute lowest cost axis and position along it to split
 fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
     // Check a certain selection of candidate split positions here
-    let num_positions = 10;
+    let num_positions = 50;
     let node_extent = node.aabb.extent();
     let split_candidates: Vec<(u32, Float)> = (0..3)
         .map(|axis: u32| {

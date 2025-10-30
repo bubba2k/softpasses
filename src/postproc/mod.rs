@@ -86,7 +86,7 @@ pub fn postprocess(
         image_map.insert(String::from("aabb_checks_heatmapped"), aabb_checks_heatmap);
     }
 
-    if let Some(pass) = render_result.passes.get("num_primitve_checks") {
+    if let Some(pass) = render_result.passes.get("num_primitive_checks") {
         let max_value = pass
             .data
             .iter()
