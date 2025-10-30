@@ -1,6 +1,6 @@
 # Softpasses
 
-Software pathtracer
+Physically based software pathtracer
 
 ## Current features
 
