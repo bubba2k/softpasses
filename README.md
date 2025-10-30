@@ -27,7 +27,7 @@ All images were rendered and postprocessed exclusively within this software on a
 ![Render of Stanford bunny without denoising or tonemapping](renders/stanford_bunny_shelf_001/color.png)
 
 ### Auxiliary and Intermediate passes
-During each run, Softpasses also produces and outputs a collection of auxiliary/intermediate passes.
+In addition to the final render, Softpasses also produces and outputs a collection of auxiliary/intermediate passes.
 
 #### Color pass
 The raw computed HDR luminance data before denoising, tonemapping and gamma correction.
