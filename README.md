@@ -39,7 +39,7 @@ The raw computed HDR luminance data before denoising, tonemapping and gamma corr
 ![Surface normal data of the Stanford dragon scene](renders/stanford_dragon_full_001/normal.png)
 
 #### BVH visualization
-BVH visualization passes such as **Average number of node checks per pixel** and **Average number of primitive checks per pixel** aid in profiling and debugging the acceleration structure. Both a heatmapped (ie normalized; as seen below) and raw HDR version are supplied.
+BVH visualization passes such as **Average number of node checks per pixel** and **Average number of primitive checks per pixel** aid in profiling and debugging the acceleration structure. Both heatmapped (ie normalized to 0-1, as seen below) and raw HDR versions are supplied.
 ![Average number of node AABB checks / pixel in the Stanford dragon scene](renders/stanford_dragon_full_001/aabb_checks_heatmapped.png)
 ![Average number of primitve checks / pixel in the Stanford dragon scene](renders/stanford_dragon_full_001/primitive_checks_heatmapped.png)
 
