@@ -9,6 +9,7 @@ Physically based software pathtracer
 - Triangle mesh loading (.obj format)
 - Materials: Lambertian diffuse BRDF, basic glass BSDF and metallic BRDF
 - Environment map defined lighting (.hdr, .exr)
+- Thin lens camera model with DOF simulation
 - Generation of auxiliary passes (albedo, normal) for denoising
 - Generation of BVH debug and visualization passes (node intersects, primitive checks)
 - Multithreaded, tiled rendering
