@@ -4,9 +4,7 @@ mod postproc;
 mod tracer;
 use std::path::{Path, PathBuf};
 
-use crate::math::transform;
 use crate::postproc::{PostProcessSettings, postprocess};
-use crate::tracer::bvh::BVH;
 use crate::tracer::render::RenderSettings;
 #[allow(unused_imports)]
 use crate::tracer::render::{BVHDebugPipeline, DefaultPipeline};
@@ -27,10 +25,8 @@ use tracer::material::{
     Material, MaterialTrait,
 };
 
-fn glass_spheres_scene_setup() -> (World, Camera, RenderSettings) {
+fn glass_bunny_scene_setup() -> (World, Camera, RenderSettings) {
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
-    let mat_glass_red_outer = MatGlass::new(vec3(0.95, 0.95, 1.0), 1.33);
-    let mat_glass_red_inner = MatGlass::new(vec3(0.95, 0.95, 1.0), 1.0 / 1.33);
     let mat_mirror = MatPrincipled::new(vec3(0.9, 0.9, 0.9), 1.0, 0.01);
     let mat_table = MatLambertDiffuse::new(vec3(0.18, 0.18, 0.2));
     let mat_wall = MatLambertDiffuse::new(vec3(0.18, 0.25, 0.2));
@@ -68,7 +64,7 @@ fn glass_spheres_scene_setup() -> (World, Camera, RenderSettings) {
     let aspect_ratio: Float = width as Float / height as Float;
 
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 1024,
+        samples_per_pixel: 64,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -139,7 +135,7 @@ fn main() -> Result<(), String> {
         )))
     };
 
-    let (world, camera, render_settings) = glass_spheres_scene_setup();
+    let (world, camera, render_settings) = glass_bunny_scene_setup();
 
     let postproc_settings = PostProcessSettings {};
 
