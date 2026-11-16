@@ -5,6 +5,7 @@ mod tracer;
 use std::path::{Path, PathBuf};
 
 use crate::postproc::{PostProcessSettings, postprocess};
+use crate::tracer::hittable::new_parallelepiped;
 use crate::tracer::pipelines::BVHDebugPipeline;
 use crate::tracer::render::RenderSettings;
 #[allow(unused_imports)]
@@ -18,7 +19,7 @@ use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
-use tracer::hittable::{Hittable, Parallelepiped, Plane, Sphere};
+use tracer::hittable::{Hittable, Plane, Sphere};
 #[allow(unused_imports)]
 use tracer::material::{ MatGlass, MatLambertDiffuse, MatPrincipled,
     Material, MaterialID
@@ -69,7 +70,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     const MAT_TABLE: MaterialID     = 2;
     const MAT_WALL: MaterialID      = 3;
 
-    let table = Parallelepiped::new(
+    let table = new_parallelepiped(
         vec3(-3.0, -1.0, -1.0),
         vec3(2.0, -1.0, -1.0),
         vec3(-3.0, -1.0, 1.0),
@@ -77,7 +78,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
         MAT_TABLE,
     );
 
-    let right_wall = Parallelepiped::new(
+    let right_wall = new_parallelepiped(
         vec3(1.0, 0.0, -1.0),
         vec3(2.0, 0.0, -1.0),
         vec3(1.0, 0.0, 1.0),
@@ -97,8 +98,8 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
         .set_materials(materials)
         .add_hittables(model1)
         .add_hittable(sphere1_outer)
-        .add_hittable(right_wall)
-        .add_hittable(table)
+        .add_hittables(right_wall)
+        .add_hittables(table)
         .build();
 
     // Camera setup
@@ -131,7 +132,7 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     const MAT_TABLE: MaterialID = 0;
     const MAT_METAL: MaterialID = 1;
 
-    let table = Parallelepiped::new(
+    let table = new_parallelepiped(
         vec3(-1.5, -1.0, -1.0),
         vec3(1.5, -1.0, -1.0),
         vec3(-1.5, -1.0, 1.0),
@@ -147,7 +148,7 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     let scene = SceneBuilder::new()
         .set_background(background)
         .set_materials(materials)
-        .add_hittable(table)
+        .add_hittables(table)
         .add_hittables(object)
         .build();
 

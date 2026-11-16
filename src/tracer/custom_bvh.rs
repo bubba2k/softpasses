@@ -410,12 +410,17 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
         unimplemented!()
     }
 
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
+        // This should theoretically never be used.
+        unimplemented!()
+    }
+
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         let query_result = self.try_hit_ordered(ray, t_interval);
         
         if let Some(hit) = query_result.hit {
             // TODO: This has to change. 
-            self.hittables[hit.0].try_hit(ray, t_interval)
+            Some(self.hittables[hit.0].compute_hit(ray, hit.1))
         } else {
             None
         }

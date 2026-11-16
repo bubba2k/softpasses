@@ -56,7 +56,9 @@ pub trait HittableTrait {
     /// # Arguments
     /// `ray` - The potentially intersecting ray.
     /// `t_interval` - The minimum and maximum distance along the ray for the hit to count. Hits outside the range will be discarded.
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord>;
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
+        self.try_intersect(ray, t_interval).map(|t| self.compute_hit(ray, t))
+    }
 
     /// Check if a given ray intersects with this object. 
     /// 
@@ -64,6 +66,10 @@ pub trait HittableTrait {
     /// `ray` - The potentially intersecting ray.
     /// `t_interval` - The minimum and maximum distance along the ray for the hit to count. Hits outside the range will be discarded.
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float>;
+
+    /// Given a successful intersection `t` units along `ray`, compute the full `HitRecord` containing
+    /// information such as hit normal and material index.
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord;
 
     /// Get the axis aligned bounding box this object.
     fn get_aabb(&self) -> AABoundingBox;
@@ -79,7 +85,6 @@ pub trait HittableTrait {
 pub enum Hittable {
     Sphere(Sphere),
     Parallelogram(Parallelogram),
-    Parallelepiped(Parallelepiped),
     Plane(Plane),
     Triangle(Triangle),
 }
@@ -88,7 +93,6 @@ impl Transformable for Hittable {
     fn apply_transform(self, transform: &Transform) -> Self {
         match self {
             Hittable::Sphere(sphere) => Hittable::Sphere(sphere.apply_transform(transform)),
-            Hittable::Parallelepiped(parallelepiped) => Hittable::Parallelepiped(parallelepiped.apply_transform(transform)),
             Hittable::Parallelogram(parallelogram) => Hittable::Parallelogram(parallelogram.apply_transform(transform)),
             Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
             Hittable::Triangle(triangle) => Hittable::Triangle(triangle.apply_transform(transform)),
@@ -100,7 +104,6 @@ impl HittableTrait for Hittable {
     fn centroid(&self) -> Vec3f {
         match self {
             Hittable::Sphere(sphere) => sphere.centroid(),
-            Hittable::Parallelepiped(parallelepiped) => parallelepiped.centroid(),
             Hittable::Parallelogram(parallelogram) => parallelogram.centroid(),
             Hittable::Plane(plane) => plane.centroid(),
             Hittable::Triangle(triangle) => triangle.centroid(),
@@ -110,7 +113,6 @@ impl HittableTrait for Hittable {
     fn get_aabb(&self) -> AABoundingBox {
         match self {
             Hittable::Sphere(sphere) => sphere.get_aabb(),
-            Hittable::Parallelepiped(parallelepiped) => parallelepiped.get_aabb(),
             Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
             Hittable::Plane(plane) => plane.get_aabb(),
             Hittable::Triangle(triangle) => triangle.get_aabb(),
@@ -120,34 +122,27 @@ impl HittableTrait for Hittable {
     fn num_primitives(&self) -> u32 {
         match self {
             Hittable::Sphere(sphere) => sphere.num_primitives(),
-            Hittable::Parallelepiped(parallelepiped) => parallelepiped.num_primitives(),
             Hittable::Parallelogram(parallelogram) => parallelogram.num_primitives(),
             Hittable::Plane(plane) => plane.num_primitives(),
             Hittable::Triangle(triangle) => triangle.num_primitives(),
         }
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        match self {
-            Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval),
-            Hittable::Parallelepiped(parallelepiped) => {
-                parallelepiped.try_hit(ray, t_interval)
-            }
-            Hittable::Parallelogram(parallelogram) => {
-                parallelogram.try_hit(ray, t_interval)
-            }
-            Hittable::Plane(plane) => plane.try_hit(ray, t_interval),
-            Hittable::Triangle(triangle) => triangle.try_hit(ray, t_interval),
-        }
-    }
-
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         match self {
             Hittable::Sphere(sphere) => sphere.try_intersect(ray, t_interval),
-            Hittable::Parallelepiped(parallelepiped) => parallelepiped.try_intersect(ray, t_interval),
             Hittable::Parallelogram(parallelogram) => parallelogram.try_intersect(ray, t_interval),
             Hittable::Plane(plane) => plane.try_intersect(ray, t_interval),
             Hittable::Triangle(triangle) => triangle.try_intersect(ray, t_interval),
+        }
+    }
+
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
+        match self {
+            Hittable::Sphere(sphere) => sphere.compute_hit(ray, t),
+            Hittable::Parallelogram(parallelogram) => parallelogram.compute_hit(ray, t),
+            Hittable::Plane(plane) => plane.compute_hit(ray, t),
+            Hittable::Triangle(triangle) => triangle.compute_hit(ray, t),
         }
     }
 }
@@ -248,56 +243,6 @@ impl AABoundingBox {
     }
 }
 
-#[derive(Default, Clone)]
-#[allow(dead_code)]
-pub struct HittableList {
-    list: Vec<Hittable>,
-    aabb: AABoundingBox,
-}
-
-impl HittableList {
-    pub fn push(&mut self, hittable: Hittable) {
-        self.aabb.expand(&hittable.get_aabb().max);
-        self.aabb.expand(&hittable.get_aabb().min);
-        self.list.push(hittable);
-    }
-}
-
-impl HittableTrait for HittableList {
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        // For all objects, try hitting them, discard Nones, then find the one with the
-        // smallest t.
-        self.list
-            .iter()
-            .map(|x| x.try_hit(ray, t_interval))
-            .flatten()
-            .min_by(|x, y| x.t.total_cmp(&y.t))
-    }
-
-    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
-        // For all objects, try hitting them, discard Nones, then find the one with the
-        // smallest t.
-        self.list
-            .iter()
-            .map(|x| x.try_intersect(ray, t_interval))
-            .flatten()
-            .min_by(|a, b| a.total_cmp(&b))
-    }
-
-    fn num_primitives(&self) -> u32 {
-        self.list.len() as u32
-    }
-
-    fn get_aabb(&self) -> AABoundingBox {
-        self.aabb.clone()
-    }
-
-    fn centroid(&self) -> Vec3f {
-        let sum: Vec3f = self.list.iter().map(|el| el.centroid()).sum();
-        sum / self.list.len() as Float
-    }
-}
-
 #[derive(Clone)]
 pub struct Sphere {
     pub center: Vec3f,
@@ -322,21 +267,17 @@ impl Transformable for Sphere {
 }
 
 impl HittableTrait for Sphere {
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        if let Some(t_hit) = self.try_intersect(ray, t_interval) {
-            let point_hit = ray.at(t_hit);
-            let sphere_normal = (point_hit - self.center) / self.radius;
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
+        let point_hit = ray.at(t);
+        let sphere_normal = (point_hit - self.center) / self.radius;
 
-            Some(HitRecord::new(
-                ray,
-                t_hit,
-                point_hit,
-                self.material_id,
-                sphere_normal,
-            ))
-        } else {
-            None
-        }
+        HitRecord::new(
+            ray,
+            t,
+            point_hit,
+            self.material_id,
+            sphere_normal,
+        )
     }
 
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
@@ -434,18 +375,15 @@ impl Transformable for Plane {
 }
 
 impl HittableTrait for Plane {
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        if let Some(t_intersect) = self.try_intersect(ray, t_interval) {
-            Some(HitRecord::new(
-                ray,
-                t_intersect,
-                ray.at(t_intersect),
-                self.material_id,
-                self.normal,
-            ))
-        } else {
-            None
-        }
+   
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
+        HitRecord::new(
+            ray,
+            t,
+            ray.at(t),
+            self.material_id,
+            self.normal,
+        )
     }
 
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
@@ -616,28 +554,21 @@ impl Parallelogram {
             material_id
         })
     }
-}
 
-impl HittableTrait for Parallelogram {
-    // Checking for Ray-Rectangle intersect involves two steps:
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
+        HitRecord::new(
+            ray,
+            t,
+            ray.at(t),
+            self.material_id,
+            self.normal,
+        )
+    }
+
+    // Checking for Ray-Parallelogram intersect involves two steps:
     // 1. Finding intersect point between ray and the plane the rect lies on
     // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
     //    then perform a 2D Point-Contains-Polygon Check
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        
-        if let Some(t_intersect) = self.try_intersect(ray, t_interval) {
-            Some(HitRecord::new(
-                ray,
-                t_intersect,
-                ray.at(t_intersect),
-                self.material_id,
-                self.normal,
-            ))
-        } else {
-            None
-        }
-    }
-
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
@@ -702,144 +633,106 @@ impl HittableTrait for Parallelogram {
     }
 }
 
-#[derive(Clone)]
-pub struct Parallelepiped {
-    // List of the 6 faces
-    list: HittableList,
+fn _new_parallelepiped(
+    back_bottom_left: Vec3f,
+    back_bottom_right: Vec3f,
+    front_bottom_left: Vec3f,
+    back_top_left: Vec3f,
+    material_id: MaterialID,
+) -> Vec<Hittable> {
+    let up = back_top_left - back_bottom_left;
+    let depth = front_bottom_left - back_bottom_left;
+
+    // Compute all 8 corners
+    let back_top_right = back_bottom_right + up;
+    let front_top_left = front_bottom_left + up;
+    let front_bottom_right = back_bottom_right + depth;
+    let front_top_right = front_bottom_right + up;
+
+    let mut hittables = Vec::<Hittable>::new();
+
+    // Front face
+    hittables.push(Parallelogram::from_points(
+        front_bottom_left,
+        front_top_left,
+        front_bottom_right,
+        material_id,
+    ));
+    // Back face
+    hittables.push(Parallelogram::from_points(
+        back_bottom_left,
+        back_top_left,
+        back_bottom_right,
+        material_id,
+    ));
+    // Top face
+    hittables.push(Parallelogram::from_points(
+        front_top_left,
+        back_top_left,
+        front_top_right,
+        material_id,
+    ));
+    // Bottom face
+    hittables.push(Parallelogram::from_points(
+        back_bottom_left,
+        front_bottom_left,
+        back_bottom_right,
+        material_id,
+    ));
+    // Left face
+    hittables.push(Parallelogram::from_points(
+        back_bottom_left,
+        back_top_left,
+        front_bottom_left,
+        material_id,
+    ));
+    // Right face
+    hittables.push(Parallelogram::from_points(
+        back_bottom_right,
+        back_top_right,
+        front_bottom_right,
+        material_id,
+    ));
+
+    hittables
 }
 
-impl Transformable for Parallelepiped {
-    fn apply_transform(self, _transform: &Transform) -> Self {
-        todo!()
-    }
+pub fn new_parallelepiped(
+    back_bottom_left: Vec3f,
+    back_bottom_right: Vec3f,
+    front_bottom_left: Vec3f,
+    back_top_left: Vec3f,
+    material_id: MaterialID,
+) -> Vec<Hittable> {
+    _new_parallelepiped(
+        back_bottom_left,
+        back_bottom_right,
+        front_bottom_left,
+        back_top_left,
+        material_id,
+    )
 }
 
-impl HittableTrait for Parallelepiped {
-    fn num_primitives(&self) -> u32 {
-        6
-    }
+pub fn new_cube(
+    front_bottom_left: Vec3f,
+    right_dir: Vec3f,
+    up_dir: Vec3f,
+    size: Float,
+    material_id: MaterialID,
+) -> Vec<Hittable> {
+    let depth_dir = up_dir.cross(right_dir).normalize();
 
-    fn get_aabb(&self) -> AABoundingBox {
-        self.list.get_aabb()
-    }
+    let back_bottom_left = front_bottom_left + depth_dir * size;
+    let back_bottom_right = back_bottom_left + right_dir.normalize() * size;
+    let back_top_left = back_bottom_left + up_dir.normalize() * size;
 
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        self.list.try_hit(ray, t_interval)
-    }
-
-    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
-        self.list.try_intersect(ray, t_interval)
-    }
-
-    fn centroid(&self) -> Vec3f {
-        self.list.centroid()
-    }
-}
-
-#[allow(dead_code)]
-impl Parallelepiped {
-    fn _new(
-        back_bottom_left: Vec3f,
-        back_bottom_right: Vec3f,
-        front_bottom_left: Vec3f,
-        back_top_left: Vec3f,
-        material_id: MaterialID,
-    ) -> Self {
-        let up = back_top_left - back_bottom_left;
-        let depth = front_bottom_left - back_bottom_left;
-
-        // Compute all 8 corners
-        let back_top_right = back_bottom_right + up;
-        let front_top_left = front_bottom_left + up;
-        let front_bottom_right = back_bottom_right + depth;
-        let front_top_right = front_bottom_right + up;
-
-        let mut list: HittableList = HittableList::default();
-
-        // Front face
-        list.push(Parallelogram::from_points(
-            front_bottom_left,
-            front_top_left,
-            front_bottom_right,
-            material_id,
-        ));
-        // Back face
-        list.push(Parallelogram::from_points(
-            back_bottom_left,
-            back_top_left,
-            back_bottom_right,
-            material_id,
-        ));
-        // Top face
-        list.push(Parallelogram::from_points(
-            front_top_left,
-            back_top_left,
-            front_top_right,
-            material_id,
-        ));
-        // Bottom face
-        list.push(Parallelogram::from_points(
-            back_bottom_left,
-            front_bottom_left,
-            back_bottom_right,
-            material_id,
-        ));
-        // Left face
-        list.push(Parallelogram::from_points(
-            back_bottom_left,
-            back_top_left,
-            front_bottom_left,
-            material_id,
-        ));
-        // Right face
-        list.push(Parallelogram::from_points(
-            back_bottom_right,
-            back_top_right,
-            front_bottom_right,
-            material_id,
-        ));
-
-        Parallelepiped { list: list }
-    }
-
-    pub fn new(
-        back_bottom_left: Vec3f,
-        back_bottom_right: Vec3f,
-        front_bottom_left: Vec3f,
-        back_top_left: Vec3f,
-        material_id: MaterialID,
-    ) -> Hittable {
-        Hittable::Parallelepiped(Self::_new(
-            back_bottom_left,
-            back_bottom_right,
-            front_bottom_left,
-            back_top_left,
-            material_id,
-        ))
-    }
-
-    pub fn new_cube(
-        front_bottom_left: Vec3f,
-        right_dir: Vec3f,
-        up_dir: Vec3f,
-        size: Float,
-        material_id: MaterialID,
-    ) -> Hittable {
-        let depth_dir = up_dir.cross(right_dir).normalize();
-
-        let back_bottom_left = front_bottom_left + depth_dir * size;
-        let back_bottom_right = back_bottom_left + right_dir.normalize() * size;
-        let back_top_left = back_bottom_left + up_dir.normalize() * size;
-
-        let p = Parallelepiped::_new(
-            back_bottom_left,
-            back_bottom_right,
-            front_bottom_left,
-            back_top_left,
-            material_id,
-        );
-        Hittable::Parallelepiped(p)
-    }
+    _new_parallelepiped(
+        back_bottom_left,
+        back_bottom_right,
+        front_bottom_left,
+        back_top_left,
+        material_id,
+    )
 }
 
 #[derive(Clone)]
@@ -897,15 +790,9 @@ impl HittableTrait for Triangle {
         }
     }
 
-    fn try_hit(
-        &self,
-        ray: &Ray,
-        t_interval: &Interval,
-    ) -> Option<HitRecord> {
-        let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
-                
-        if let Some(t) = self.try_intersect(ray, t_interval) {
-            let point_hit = ray.at(t);
+    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
+        let point_hit = ray.at(t);
+            let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
             // coordinates, u, v, w.
@@ -927,10 +814,7 @@ impl HittableTrait for Triangle {
                 + self.normals[2] * w)
                 .normalize();
 
-            Some(HitRecord::new(ray, t, ray.at(t), self.material_id, obj_normal)) 
-        } else {
-            None
-        }
+            HitRecord::new(ray, t, ray.at(t), self.material_id, obj_normal)
     }
 }
 
