@@ -405,14 +405,29 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
             .sum()
     }
 
+    fn try_intersect(&self, _ray: &Ray, _t_interval: &Interval) -> Option<Float> {
+        // This should theoretically never be used.
+        unimplemented!()
+    }
+
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         let query_result = self.try_hit_ordered(ray, t_interval);
-        query_result.hit
+        
+        if let Some(hit) = query_result.hit {
+            // TODO: This has to change. 
+            self.hittables[hit.0].try_hit(ray, t_interval)
+        } else {
+            None
+        }
+
+
     }
 }
 
 pub struct BVHQueryResult {
-    pub hit: Option<HitRecord>,
+    /// The hit contains a tuple of the index of the hit primitve,
+    /// and the distance `t` from the ray origin the hit occured at.
+    pub hit: Option<(usize, Float)>,
     pub num_aabb_checks: u32,
     pub num_aabb_hits: u32,
     pub num_primitive_checks: u32,
@@ -440,7 +455,7 @@ impl<T: HittableTrait> BVH<T> {
         let mut to_discover = StaticStack::<(usize, Float), 64>::new((0, 0.0));
         // The closest primitive hit found so far
         let mut best_t = Float::INFINITY;
-        let mut best_hit: Option<HitRecord> = None;
+        let mut best_prim_idx: usize = 0;
 
         let mut num_aabb_intersects = 0;
         let mut num_aabb_checks = 0;
@@ -471,18 +486,22 @@ impl<T: HittableTrait> BVH<T> {
                 // Since we are doing an ordered traverse (from nodes closest to furthest to camera),
                 // we know that we have definitely found the closest hit, if there is one.
                 num_primitive_checks += node.num_prims;
-                if let Some(closest_hit) = 
+                if let Some(t_hit) = 
                     ((node.first as usize)..((node.first + node.num_prims) as usize))
                     .map(|idx| (idx as u32, &self.hittables[idx]))
                     .map(|(idx, prim)| {
-                        prim.try_hit(ray, t_interval) 
+                       if let Some (t_hit) = prim.try_intersect(ray, t_interval) {
+                            Some((idx, t_hit))
+                       } else {
+                            None
+                       }
                     })
                     .flatten()
-                    .min_by(|a, b| a.t.total_cmp(&b.t))
+                    .min_by(|a, b| a.1.total_cmp(&b.1))
                 {
-                    if closest_hit.t < best_t {
-                        best_t = closest_hit.t;
-                        best_hit = Some(closest_hit);
+                    if t_hit.1 < best_t {
+                        best_t = t_hit.1;
+                        best_prim_idx = t_hit.0 as usize;
                     }
                 }
             } else {
@@ -519,43 +538,18 @@ impl<T: HittableTrait> BVH<T> {
             }
         }
 
+        let hit = if best_t != Float::INFINITY {
+            Some((best_prim_idx, best_t))
+        } else {
+            None
+        };
+
         return BVHQueryResult {
-            hit: best_hit,
+            hit: hit,
             num_aabb_checks: num_aabb_checks,
             num_aabb_hits: num_aabb_intersects,
             num_primitive_checks,
         };
-    }
-
-    fn try_hit_rec(
-        &self,
-        ray: &Ray,
-        t_interval: &Interval,
-        bvh_idx: u32,
-    ) -> Option<HitRecord> {
-        // Traverse the bvh
-        let node = &self.nodes[bvh_idx as usize];
-
-        // A node is a leaf if it has primitives
-        if node.num_prims != 0 {
-            let range = (node.first as usize)..(node.first as usize + node.num_prims as usize);
-            return range
-                .map(|idx| self.hittables[idx].try_hit(ray, &t_interval))
-                .flatten()
-                .min_by(|a, b| a.t.total_cmp(&b.t));
-        }
-
-        if node.aabb.hit(ray, &t_interval) {
-            let left_idx = node.first;
-            let right_idx = node.first + 1;
-
-            [left_idx, right_idx]
-                .iter()
-                .flat_map(|idx| self.try_hit_rec(ray, t_interval, *idx))
-                .min_by(|a, b| a.t.total_cmp(&b.t))
-        } else {
-            None
-        }
     }
 }
 

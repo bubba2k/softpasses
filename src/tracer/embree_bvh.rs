@@ -23,6 +23,10 @@ impl HittableTrait for BVH {
         todo!()
     }
 
+    fn try_intersect(&self, ray: &crate::math::ray::Ray, t_interval: &crate::math::util::Interval) -> Option<crate::math::vector::Float> {
+        todo!()
+    }
+
     fn try_hit(&self, ray: &crate::math::ray::Ray, t_interval: &crate::math::util::Interval) -> Option<super::hittable::HitRecord> {
         todo!()
     }

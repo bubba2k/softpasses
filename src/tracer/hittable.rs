@@ -51,13 +51,19 @@ impl<'a> HitRecord {
 
 /// Trait given to all objects that can be hit by a ray.
 pub trait HittableTrait {
-    /// Check if the given ray hits this object.
+    /// Check if the given ray hits this object. Computes a full hit record including material, normal, etc.
     /// 
     /// # Arguments
     /// `ray` - The potentially intersecting ray.
     /// `t_interval` - The minimum and maximum distance along the ray for the hit to count. Hits outside the range will be discarded.
-    /// `ray_info` - Additional info on the ray.
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord>;
+
+    /// Check if a given ray intersects with this object. 
+    /// 
+    /// # Arguments
+    /// `ray` - The potentially intersecting ray.
+    /// `t_interval` - The minimum and maximum distance along the ray for the hit to count. Hits outside the range will be discarded.
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float>;
 
     /// Get the axis aligned bounding box this object.
     fn get_aabb(&self) -> AABoundingBox;
@@ -67,30 +73,6 @@ pub trait HittableTrait {
 
     /// Return the centroid of the object.
     fn centroid(&self) -> Vec3f;
-}
-
-// Helper: Get the t parameter at which a sphere is struck.
-fn hit_sphere(ray: &Ray, center: &Vec3f, radius: Float) -> Option<Float> {
-    let oc = *center - ray.orig;
-    let a = ray.dir.length_squared(); // A vector dotted with itself == its length squared
-    let b = -2.0 * ray.dir.dot(oc);
-    let c = oc.length_squared() - radius * radius;
-    let discriminant = b * b - 4.0 * a * c;
-    if discriminant >= 0.0 {
-        // Got a hit, find the two possible ones.
-        let t1 = (-b + discriminant.sqrt()) / (2.0 * a);
-        let t2 = (-b - discriminant.sqrt()) / (2.0 * a);
-        // Find and return the smaller, nonnegative value of both. (If exists)
-        match (t1 >= 0.0, t2 >= 0.0) {
-            (true, true) => Some(t1.min(t2)),
-            (true, false) => Some(t1),
-            (false, true) => Some(t2),
-            (false, false) => None,
-        }
-    } else {
-        // No hit, nothing
-        None
-    }
 }
 
 #[derive(Clone)]
@@ -156,6 +138,16 @@ impl HittableTrait for Hittable {
             }
             Hittable::Plane(plane) => plane.try_hit(ray, t_interval),
             Hittable::Triangle(triangle) => triangle.try_hit(ray, t_interval),
+        }
+    }
+
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
+        match self {
+            Hittable::Sphere(sphere) => sphere.try_intersect(ray, t_interval),
+            Hittable::Parallelepiped(parallelepiped) => parallelepiped.try_intersect(ray, t_interval),
+            Hittable::Parallelogram(parallelogram) => parallelogram.try_intersect(ray, t_interval),
+            Hittable::Plane(plane) => plane.try_intersect(ray, t_interval),
+            Hittable::Triangle(triangle) => triangle.try_intersect(ray, t_interval),
         }
     }
 }
@@ -273,10 +265,6 @@ impl HittableList {
 
 impl HittableTrait for HittableList {
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        // Abort if the ray does not hit this lists bounding box (TODO: This seems to worsen performance,
-        // so it is turned off for now.)
-        // if !self.aabb.hit(ray, t_interval)  { return None; }
-
         // For all objects, try hitting them, discard Nones, then find the one with the
         // smallest t.
         self.list
@@ -284,6 +272,16 @@ impl HittableTrait for HittableList {
             .map(|x| x.try_hit(ray, t_interval))
             .flatten()
             .min_by(|x, y| x.t.total_cmp(&y.t))
+    }
+
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
+        // For all objects, try hitting them, discard Nones, then find the one with the
+        // smallest t.
+        self.list
+            .iter()
+            .map(|x| x.try_intersect(ray, t_interval))
+            .flatten()
+            .min_by(|a, b| a.total_cmp(&b))
     }
 
     fn num_primitives(&self) -> u32 {
@@ -325,22 +323,49 @@ impl Transformable for Sphere {
 
 impl HittableTrait for Sphere {
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
-            if t_interval.contains(&t_hit) {
-                let point_hit = ray.at(t_hit);
-                let sphere_normal = (point_hit - self.center) / self.radius;
+        if let Some(t_hit) = self.try_intersect(ray, t_interval) {
+            let point_hit = ray.at(t_hit);
+            let sphere_normal = (point_hit - self.center) / self.radius;
 
-                Some(HitRecord::new(
-                    ray,
-                    t_hit,
-                    point_hit,
-                    self.material_id,
-                    sphere_normal,
-                ))
+            Some(HitRecord::new(
+                ray,
+                t_hit,
+                point_hit,
+                self.material_id,
+                sphere_normal,
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
+        let oc = self.center - ray.orig;
+        let a = ray.dir.length_squared(); // A vector dotted with itself == its length squared
+        let b = -2.0 * ray.dir.dot(oc);
+        let c = oc.length_squared() - self.radius * self.radius;
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant >= 0.0 {
+            // Got a hit, find the two possible ones.
+            let t1 = (-b + discriminant.sqrt()) / (2.0 * a);
+            let t2 = (-b - discriminant.sqrt()) / (2.0 * a);
+            // Find and return the smaller, nonnegative value of both. (If it exists, and is within the interal limits)
+            if let Some(t) = match (t1 >= 0.0, t2 >= 0.0) {
+                (true, true) => Some(t1.min(t2)),
+                (true, false) => Some(t1),
+                (false, true) => Some(t2),
+                (false, false) => None,
+            } {
+                if t_interval.contains(&t)  {
+                    Some(t)
+                } else {
+                    None
+                }
             } else {
                 None
             }
         } else {
+            // No hit, nothing
             None
         }
     }
@@ -410,6 +435,20 @@ impl Transformable for Plane {
 
 impl HittableTrait for Plane {
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
+        if let Some(t_intersect) = self.try_intersect(ray, t_interval) {
+            Some(HitRecord::new(
+                ray,
+                t_intersect,
+                ray.at(t_intersect),
+                self.material_id,
+                self.normal,
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -418,17 +457,9 @@ impl HittableTrait for Plane {
         let t_intersect = (-self.normal.dot(ray.orig) + self.d) / self.normal.dot(ray.dir);
 
         if !t_interval.contains(&t_intersect) {
-            return None;
+            None
         } else {
-            let p_intersect = ray.at(t_intersect);
-
-            Some(HitRecord::new(
-                ray,
-                t_intersect,
-                p_intersect,
-                self.material_id,
-                self.normal,
-            ))
+            Some(t_intersect)
         }
     }
 
@@ -593,6 +624,21 @@ impl HittableTrait for Parallelogram {
     // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
     //    then perform a 2D Point-Contains-Polygon Check
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
+        
+        if let Some(t_intersect) = self.try_intersect(ray, t_interval) {
+            Some(HitRecord::new(
+                ray,
+                t_intersect,
+                ray.at(t_intersect),
+                self.material_id,
+                self.normal,
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -602,39 +648,33 @@ impl HittableTrait for Parallelogram {
 
         if !t_interval.contains(&t_intersect) {
             return None;
+        }
+
+        let p_intersect = ray.at(t_intersect);
+
+        // Check what coordinate plane we have to project onto.
+        let projected_intersect_point = match self.projection_plane {
+            CoordinatePlane::XY => p_intersect,
+            CoordinatePlane::XZ => Vec3f::new(p_intersect.x, p_intersect.z, 0.0),
+            CoordinatePlane::YZ => Vec3f::new(p_intersect.y, p_intersect.z, 0.0),
+        };
+
+        // Check whether the point we found is inside the rectangles boundaries.
+        // Now perform the classic ole "left of all edges" check. Lets us know whether the projected point
+        // lies inside the projected bounds.
+        let mut is_left_of_all = true;
+        for i in 0..4 {
+            let a = &self.projected_bounds[i];
+            let b = &self.projected_bounds[(i + 1) % 4];
+            if !vector::point_left_of_edge(&projected_intersect_point, a, b) {
+                is_left_of_all = false;
+            }
+        }
+
+        if is_left_of_all {
+            Some(t_intersect)
         } else {
-            let p_intersect = ray.at(t_intersect);
-
-            // Check what coordinate plane we have to project onto.
-            let projected_intersect_point = match self.projection_plane {
-                CoordinatePlane::XY => p_intersect,
-                CoordinatePlane::XZ => Vec3f::new(p_intersect.x, p_intersect.z, 0.0),
-                CoordinatePlane::YZ => Vec3f::new(p_intersect.y, p_intersect.z, 0.0),
-            };
-
-            // Check whether the point we found is inside the rectangles boundaries.
-            // Now perform the classic ole "left of all edges" check. Lets us know whether the projected point
-            // lies inside the projected bounds.
-            let mut is_left_of_all = true;
-            for i in 0..4 {
-                let a = &self.projected_bounds[i];
-                let b = &self.projected_bounds[(i + 1) % 4];
-                if !vector::point_left_of_edge(&projected_intersect_point, a, b) {
-                    is_left_of_all = false;
-                }
-            }
-
-            if is_left_of_all {
-                Some(HitRecord::new(
-                    ray,
-                    t_intersect,
-                    p_intersect,
-                    self.material_id,
-                    self.normal,
-                ))
-            } else {
-                None
-            }
+            None
         }
     }
 
@@ -685,6 +725,10 @@ impl HittableTrait for Parallelepiped {
 
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         self.list.try_hit(ray, t_interval)
+    }
+
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
+        self.list.try_intersect(ray, t_interval)
     }
 
     fn centroid(&self) -> Vec3f {
@@ -822,11 +866,7 @@ impl HittableTrait for Triangle {
         1
     }
 
-    fn try_hit(
-        &self,
-        ray: &Ray,
-        t_interval: &Interval,
-    ) -> Option<HitRecord> {
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
         // Determine whether the ray is parallel
         let edge1 = b - a;
@@ -849,7 +889,22 @@ impl HittableTrait for Triangle {
             return None;
         }
         let t = f * edge2.dot(q);
+
         if t_interval.contains(&t) {
+            Some(t)
+        } else {
+            None
+        }
+    }
+
+    fn try_hit(
+        &self,
+        ray: &Ray,
+        t_interval: &Interval,
+    ) -> Option<HitRecord> {
+        let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
+                
+        if let Some(t) = self.try_intersect(ray, t_interval) {
             let point_hit = ray.at(t);
 
             // Interpolate normal of the triangle. First, we have to find the barycentric
@@ -893,9 +948,9 @@ impl Transformable for Triangle {
                 .try_into()
                 .unwrap(),
             normals: self
-                .positions
+                .normals
                 .into_iter()
-                .map(|p| (normal_mat * p).normalize())
+                .map(|n| (normal_mat * n).normalize())
                 .collect::<Vec<Vec3f>>()
                 .try_into()
                 .unwrap(),
