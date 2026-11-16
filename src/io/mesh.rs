@@ -1,8 +1,17 @@
 use crate::math::vector::Vec3f;
-use crate::tracer::hittable::Triangle;
+use crate::tracer::hittable::{Hittable, Triangle};
+use crate::tracer::material::MaterialID;
 use std::path::Path;
 
-pub fn load_obj(path: &Path) -> Vec<Triangle> {
+pub fn load_obj_file(path: &Path, material_id: MaterialID) ->  Vec<Hittable> {
+    let triangles = load_obj_file_tris(path, material_id);
+
+    triangles.into_iter().map( |tri: Triangle| -> Hittable {
+        Hittable::Triangle(tri)
+    }).collect()
+}
+
+fn load_obj_file_tris(path: &Path, material_id: MaterialID) -> Vec<Triangle> {
     const LOAD_OPTIONS: tobj::LoadOptions = tobj::LoadOptions {
         single_index: true,
         triangulate: true,
@@ -58,6 +67,7 @@ pub fn load_obj(path: &Path) -> Vec<Triangle> {
         triangles.push(Triangle {
             positions: [positions[i + 0], positions[i + 1], positions[i + 2]],
             normals: [normals[i + 0], normals[i + 1], normals[i + 2]],
+            material_id
         });
     }
 

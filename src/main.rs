@@ -5,17 +5,17 @@ mod tracer;
 use std::path::{Path, PathBuf};
 
 use crate::postproc::{PostProcessSettings, postprocess};
+use crate::tracer::pipelines::BVHDebugPipeline;
 use crate::tracer::render::RenderSettings;
 #[allow(unused_imports)]
-use crate::tracer::pipelines::{BVHDebugPipeline, DefaultPipeline};
+use crate::tracer::pipelines::{DefaultPipeline};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
-use crate::tracer::world::{Background, Scene};
+use crate::tracer::world::{Background, Scene, SceneBuilder};
 use math::transform::{Transform, Transformable};
 use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
-use tracer::custom_bvh::BVHMesh;
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
 use tracer::hittable::{Hittable, Parallelepiped, Plane, Sphere};
@@ -29,14 +29,12 @@ fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     let materials = vec![mat_wall];
     const MAT_WALL: MaterialID = 0;
 
-
-    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/sponza_merged.obj"), MAT_WALL);
+    let sponza = io::mesh::load_obj_file(Path::new("assets/models/sponza_merged.obj"), MAT_WALL);
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
     let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
 
-    let objects = vec![ sponza ];
-    let world = Scene::new(objects, materials, background);
+    let scene = SceneBuilder::new().add_hittables(sponza).set_background(background).set_materials(materials).build();
 
     // Camera setup
     let width: u32 = 1920 / 1;
@@ -56,7 +54,7 @@ fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
 
     let camera = Camera::new(pose, lens);
 
-    return (world, camera, render_settings);
+    return (scene, camera, render_settings);
 }
 
 fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
@@ -89,14 +87,19 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
 
     let sphere1_outer: Hittable = Sphere::new(vec3(-1.3, 0.501, -0.4), 0.5, MAT_MIRROR);
 
-    let model1 = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), MAT_GLASS);
+    let model1 = io::mesh::load_obj_file(Path::new("assets/models/bunny.obj"), MAT_GLASS);
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
     let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
 
-    let objects = vec![model1, sphere1_outer, right_wall, table];
-
-    let world = Scene::new(objects, materials, background);
+    let scene = SceneBuilder::new()
+        .set_background(background)
+        .set_materials(materials)
+        .add_hittables(model1)
+        .add_hittable(sphere1_outer)
+        .add_hittable(right_wall)
+        .add_hittable(table)
+        .build();
 
     // Camera setup
     let width: u32 = 1920 / 1;
@@ -116,7 +119,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
 
     let camera = Camera::new(pose, lens);
 
-    return (world, camera, render_settings);
+    return (scene, camera, render_settings);
 }
 
 fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
@@ -136,14 +139,17 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
         MAT_TABLE,
     );
 
-    let object = BVHMesh::from_obj_file(Path::new("assets/models/dragon.obj"), MAT_METAL);
-
-    let objects = vec![object, table];
+    let object = io::mesh::load_obj_file(Path::new("assets/models/dragon.obj"), MAT_METAL);
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/apartmentbalcony_4k.exr")).unwrap();
     let background = Background::from_environment_texture(env_texture, std::f32::consts::PI, 1.0);
 
-    let world = Scene::new(objects, materials, background);
+    let scene = SceneBuilder::new()
+        .set_background(background)
+        .set_materials(materials)
+        .add_hittable(table)
+        .add_hittables(object)
+        .build();
 
     // Camera setup
     let width: u32 = 1920 / 1;
@@ -163,7 +169,7 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
 
     let camera = Camera::new(pose, lens);
 
-    return (world, camera, render_settings);
+    return (scene, camera, render_settings);
 }
 
 fn main() -> Result<(), String> {
@@ -186,8 +192,7 @@ fn main() -> Result<(), String> {
     let render_result =
         scheduler.render::<DefaultPipeline, 3>(camera.clone(), render_settings.clone(), &world);
     eprintln!("{}", render_result.to_string());
-    let bvh_result =
-        scheduler.render::<BVHDebugPipeline, 3>(camera.clone(), render_settings.clone(), &world);
+    let bvh_result = scheduler.render::<BVHDebugPipeline, 3>(camera.clone(), render_settings.clone(), &world);
     eprintln!("{}", bvh_result.to_string());
 
     let render_postproc_result = postprocess(&render_result, &postproc_settings);

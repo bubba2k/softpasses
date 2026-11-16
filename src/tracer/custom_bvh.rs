@@ -406,8 +406,16 @@ impl<T: HittableTrait> HittableTrait for BVH<T> {
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
-        self.try_hit_rec(ray, t_interval, 0)
+        let query_result = self.try_hit_ordered(ray, t_interval);
+        query_result.hit
     }
+}
+
+pub struct BVHQueryResult {
+    pub hit: Option<HitRecord>,
+    pub num_aabb_checks: u32,
+    pub num_aabb_hits: u32,
+    pub num_primitive_checks: u32,
 }
 
 impl<T: HittableTrait> BVH<T> {
@@ -420,6 +428,103 @@ impl<T: HittableTrait> BVH<T> {
             hittables: hittables,
             nodes: bvh_nodes,
         }
+    }
+
+    pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
+        // Keep track of the nodes to discover here (DFS)
+        // Try to preallocate a reasonably sized stack. Inside the stack, we save the near distance of
+        // the aabb to the ray, and its index of course.
+        // We use a statically sized stack here. This could cause some very mean issues
+        // if the number of nodes we yet have to discover exceeds the capacity.
+        // 64 cap should serve us well for now.
+        let mut to_discover = StaticStack::<(usize, Float), 64>::new((0, 0.0));
+        // The closest primitive hit found so far
+        let mut best_t = Float::INFINITY;
+        let mut best_hit: Option<HitRecord> = None;
+
+        let mut num_aabb_intersects = 0;
+        let mut num_aabb_checks = 0;
+        let mut num_primitive_checks = 0;
+
+        // Start at the root node. We only push it on the stack if it is actually hit,
+        // otherwise the algorithm just terminates right away.
+        if let Some(dist) = self.nodes[0].aabb.dist(ray, t_interval) {
+            num_aabb_checks += 1;
+            num_aabb_intersects += 1;
+            to_discover.push((0, dist));
+        } else {
+            num_aabb_checks += 1;
+        }
+        while let Some((node_idx, node_dist)) = to_discover.pop() {
+            // Traverse the bvh
+
+            // If this nodes is *behind* the currently best t, we do not need to check it further.
+            if node_dist > best_t {
+                continue;
+            }
+
+            let node = &self.nodes[node_idx];
+
+            // A node is a leaf if it contains more than 0 prims
+            if node.num_prims > 0 {
+                // Determine the closest primitve hit inside this leaf node.
+                // Since we are doing an ordered traverse (from nodes closest to furthest to camera),
+                // we know that we have definitely found the closest hit, if there is one.
+                num_primitive_checks += node.num_prims;
+                if let Some(closest_hit) = 
+                    ((node.first as usize)..((node.first + node.num_prims) as usize))
+                    .map(|idx| (idx as u32, &self.hittables[idx]))
+                    .map(|(idx, prim)| {
+                        prim.try_hit(ray, t_interval) 
+                    })
+                    .flatten()
+                    .min_by(|a, b| a.t.total_cmp(&b.t))
+                {
+                    if closest_hit.t < best_t {
+                        best_t = closest_hit.t;
+                        best_hit = Some(closest_hit);
+                    }
+                }
+            } else {
+                // Node is interior, check whether we care about its children
+                // Remember: We want to go for the _closest_ nodes first, and we ignore all nodes whose
+                // AABB is not hit.
+                let (a, b) = (node.first as usize, (node.first + 1) as usize);
+                num_aabb_checks += 2;
+                match (
+                    self.nodes[a].aabb.dist(ray, t_interval),
+                    self.nodes[b].aabb.dist(ray, t_interval),
+                ) {
+                    (None, None) => {}
+                    (None, Some(dist_b)) => {
+                        to_discover.push((b, dist_b));
+                        num_aabb_intersects += 1;
+                    }
+                    (Some(dist_a), None) => {
+                        to_discover.push((a, dist_a));
+                        num_aabb_intersects += 1;
+                    }
+                    (Some(dist_a), Some(dist_b)) => {
+                        num_aabb_intersects += 2;
+
+                        if dist_a < dist_b {
+                            to_discover.push((b, dist_b));
+                            to_discover.push((a, dist_a));
+                        } else {
+                            to_discover.push((a, dist_a));
+                            to_discover.push((b, dist_b));
+                        }
+                    }
+                };
+            }
+        }
+
+        return BVHQueryResult {
+            hit: best_hit,
+            num_aabb_checks: num_aabb_checks,
+            num_aabb_hits: num_aabb_intersects,
+            num_primitive_checks,
+        };
     }
 
     fn try_hit_rec(
@@ -485,6 +590,7 @@ impl<T: Copy, const N: usize> StaticStack<T, N> {
     }
 }
 
+/*
 #[derive(Clone)]
 pub struct BVHMesh {
     triangles: Vec<Triangle>,
@@ -522,6 +628,7 @@ impl Transformable for BVHMesh {
         }
     }
 }
+
 
 impl BVHMesh {
     pub fn from_obj_file(path: &Path, material_id: MaterialID) -> Hittable {
@@ -780,3 +887,4 @@ impl HittableTrait for BVHMesh {
         (self.nodes[0].aabb.max - self.nodes[0].aabb.min) * 0.5 + self.nodes[0].aabb.min
     }
 }
+*/

@@ -1,8 +1,57 @@
 use crate::math::vector::{Color, Float, Vec3f};
 use crate::tracer::material::Material;
 use crate::tracer::custom_bvh::BVH;
-use crate::tracer::hittable::Hittable;
+use crate::tracer::hittable::{Hittable, HittableTrait};
 use crate::tracer::texture::Texture;
+
+pub struct SceneBuilder {
+    pub hittables: Vec<Hittable>,
+    pub materials: Vec<Material>,
+    pub background: Background,
+}
+
+impl SceneBuilder {
+    pub fn new() -> Self {
+        SceneBuilder { hittables: vec![], materials: vec![], background: Background::Solid(glam::vec3(1.0, 1.0, 1.0)) }
+    }
+
+    pub fn add_hittable(self, hittable: Hittable) -> Self {
+        let mut new_hittables = self.hittables;
+        new_hittables.push(hittable);
+
+        SceneBuilder { 
+            hittables: new_hittables, 
+            ..self
+        }
+    }
+
+    pub fn add_hittables(self, hittables: Vec<Hittable>) -> Self {
+        let mut hittables_mut = hittables;
+        let mut new_hittables = self.hittables;
+        new_hittables.append(&mut hittables_mut);
+
+        SceneBuilder {
+            hittables: new_hittables, 
+            ..self
+        }
+    }
+
+    pub fn set_background(self, background: Background) -> Self {
+        SceneBuilder { background: background, ..self }
+    }
+
+    pub fn set_materials(self, materials: Vec<Material>) -> Self {
+        SceneBuilder { materials: materials, ..self }
+    }
+
+    pub fn build(self) -> Scene {
+        Scene {
+            objects_bvh: BVH::new(self.hittables),
+            materials: self.materials,
+            background: self.background,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct Scene {
@@ -12,7 +61,7 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new(objects: Vec<Hittable>, materials: Vec<Material>, background: Background) -> Self {
+    fn new(objects: Vec<Hittable>, materials: Vec<Material>, background: Background) -> Self {
         let bvh = BVH::new(objects);
 
         Scene {

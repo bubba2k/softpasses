@@ -3,7 +3,6 @@ use crate::math::ray::Ray;
 use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
-use crate::tracer;
 
 /// Contains 
 pub struct HitRecord {
@@ -100,21 +99,17 @@ pub enum Hittable {
     Parallelogram(Parallelogram),
     Parallelepiped(Parallelepiped),
     Plane(Plane),
-    BVHMesh(tracer::custom_bvh::BVHMesh),
+    Triangle(Triangle),
 }
 
 impl Transformable for Hittable {
     fn apply_transform(self, transform: &Transform) -> Self {
         match self {
             Hittable::Sphere(sphere) => Hittable::Sphere(sphere.apply_transform(transform)),
-            Hittable::Parallelepiped(parallelepiped) => {
-                Hittable::Parallelepiped(parallelepiped.apply_transform(transform))
-            }
-            Hittable::Parallelogram(parallelogram) => {
-                Hittable::Parallelogram(parallelogram.apply_transform(transform))
-            }
+            Hittable::Parallelepiped(parallelepiped) => Hittable::Parallelepiped(parallelepiped.apply_transform(transform)),
+            Hittable::Parallelogram(parallelogram) => Hittable::Parallelogram(parallelogram.apply_transform(transform)),
             Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
-            Hittable::BVHMesh(bvh_mesh) => Hittable::BVHMesh(bvh_mesh.apply_transform(transform)),
+            Hittable::Triangle(triangle) => Hittable::Triangle(triangle.apply_transform(transform)),
         }
     }
 }
@@ -126,7 +121,7 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.centroid(),
             Hittable::Parallelogram(parallelogram) => parallelogram.centroid(),
             Hittable::Plane(plane) => plane.centroid(),
-            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.centroid(),
+            Hittable::Triangle(triangle) => triangle.centroid(),
         }
     }
 
@@ -136,7 +131,7 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.get_aabb(),
             Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
             Hittable::Plane(plane) => plane.get_aabb(),
-            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.get_aabb(),
+            Hittable::Triangle(triangle) => triangle.get_aabb(),
         }
     }
 
@@ -146,7 +141,7 @@ impl HittableTrait for Hittable {
             Hittable::Parallelepiped(parallelepiped) => parallelepiped.num_primitives(),
             Hittable::Parallelogram(parallelogram) => parallelogram.num_primitives(),
             Hittable::Plane(plane) => plane.num_primitives(),
-            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.num_primitives(),
+            Hittable::Triangle(triangle) => triangle.num_primitives(),
         }
     }
 
@@ -160,7 +155,7 @@ impl HittableTrait for Hittable {
                 parallelogram.try_hit(ray, t_interval)
             }
             Hittable::Plane(plane) => plane.try_hit(ray, t_interval),
-            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.try_hit(ray, t_interval),
+            Hittable::Triangle(triangle) => triangle.try_hit(ray, t_interval),
         }
     }
 }
@@ -807,6 +802,7 @@ impl Parallelepiped {
 pub struct Triangle {
     pub positions: [Vec3f; 3],
     pub normals: [Vec3f; 3],
+    pub material_id: MaterialID,
 }
 
 impl HittableTrait for Triangle {
@@ -828,11 +824,58 @@ impl HittableTrait for Triangle {
 
     fn try_hit(
         &self,
-        _ray: &Ray,
-        _t_interval: &Interval,
+        ray: &Ray,
+        t_interval: &Interval,
     ) -> Option<HitRecord> {
-        // Since the triangles are used only inside BVHMesh, this should never be used.
-        todo!()
+        let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
+        // Determine whether the ray is parallel
+        let edge1 = b - a;
+        let edge2 = c - a;
+        let h = ray.dir.cross(edge2);
+        let det = edge1.dot(h);
+        // If det is close to 0, the ray is parallel to the triangle
+        if det.abs() < 1e-8 {
+            return None;
+        }
+        let f = 1.0 / det;
+        let s = ray.orig - a;
+        let u = f * s.dot(h);
+        if u < 0.0 || u > 1.0 {
+            return None;
+        }
+        let q = s.cross(edge1);
+        let v = f * ray.dir.dot(q);
+        if v < 0.0 || u + v > 1.0 {
+            return None;
+        }
+        let t = f * edge2.dot(q);
+        if t_interval.contains(&t) {
+            let point_hit = ray.at(t);
+
+            // Interpolate normal of the triangle. First, we have to find the barycentric
+            // coordinates, u, v, w.
+            let v0 = b - a;
+            let v1 = c - a;
+            let v2 = point_hit - a;
+            let d00 = v0.dot(v0);
+            let d01 = v0.dot(v1);
+            let d11 = v1.dot(v1);
+            let d20 = v2.dot(v0);
+            let d21 = v2.dot(v1);
+            let denom = d00 * d11 - d01 * d01;
+            let v = (d11 * d20 - d01 * d21) / denom;
+            let w = (d00 * d21 - d01 * d20) / denom;
+            let u = 1.0 - v - w;
+            // Now interpolate between the three corners.
+            let obj_normal = (self.normals[0] * u
+                + self.normals[1] * v
+                + self.normals[2] * w)
+                .normalize();
+
+            Some(HitRecord::new(ray, t, ray.at(t), self.material_id, obj_normal)) 
+        } else {
+            None
+        }
     }
 }
 
@@ -856,6 +899,7 @@ impl Transformable for Triangle {
                 .collect::<Vec<Vec3f>>()
                 .try_into()
                 .unwrap(),
+            ..self
         }
     }
 }

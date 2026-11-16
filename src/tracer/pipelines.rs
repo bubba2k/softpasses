@@ -240,7 +240,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
     fn trace_sample(
         ray: &Ray,
         settings: &RenderSettings,
-        world: &Scene,
+        scene: &Scene,
     ) -> [Color; 3] {
         let mut passes: [u32; 3] = [0, 0, 0];
         // Remember:
@@ -248,18 +248,10 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         // 1: "num_aabb_checks",
         // 2: "num_primitive_checks",
 
-        for mesh in world.objects_bvh.hittables.iter().flat_map(|e| {
-            if let Hittable::BVHMesh(mesh) = e {
-                Some(mesh)
-            } else {
-                None
-            }
-        }) {
-            let query_result = mesh.try_hit_ordered(ray, &settings.ray_limits);
+        let query_result = scene.objects_bvh.try_hit_ordered(ray, &settings.ray_limits);
             passes[0] = query_result.num_aabb_hits;
             passes[1] = query_result.num_aabb_checks;
             passes[2] = query_result.num_primitive_checks;
-        }
 
         let mut res: [Color; 3] = array::from_fn(|_| Color::default());
         for i in 0..3 {
