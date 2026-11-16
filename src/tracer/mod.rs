@@ -1,4 +1,5 @@
-pub mod bvh;
+pub mod custom_bvh;
+pub mod embree_bvh;
 pub mod camera;
 pub mod hittable;
 pub mod material;

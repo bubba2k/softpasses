@@ -100,7 +100,7 @@ pub enum Hittable {
     Parallelogram(Parallelogram),
     Parallelepiped(Parallelepiped),
     Plane(Plane),
-    BVHMesh(tracer::bvh::BVHMesh),
+    BVHMesh(tracer::custom_bvh::BVHMesh),
 }
 
 impl Transformable for Hittable {

@@ -15,7 +15,7 @@ use crate::tracer::world::{Background, World};
 use math::transform::{Transform, Transformable};
 use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
-use tracer::bvh::BVHMesh;
+use tracer::custom_bvh::BVHMesh;
 use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
 use tracer::hittable::{Hittable, Parallelepiped, Plane, Sphere};

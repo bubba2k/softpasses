@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.41"
+embree4-rs = "0.0.16"
 fastrand = "2.3.0"
 glam = "0.30.5"
 image = "0.25.6"
@@ -15,3 +16,8 @@ radiant = "0.3.0"
 rand = "0.9.1"
 rayon = "1.10.0"
 tobj = "4.0.3"
+
+[patch.crates-io]
+# TODO: A pull request for this patch has been submitted to the original crate (https://github.com/psytrx/embree4-sys)
+#       Remove this patch once its merged and updated.
+embree4-sys = { git = "https://github.com/bubba2k/embree4-sys.git" }
