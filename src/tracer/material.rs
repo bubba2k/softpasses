@@ -17,25 +17,19 @@ pub trait MaterialTrait {
 
 #[derive(Clone)]
 pub enum Material {
-    MatNormalDebug(MatNormalDebug),
-    MatFaceDebug(MatFaceDebug),
     MatLambertDiffuse(MatLambertDiffuse),
     MatPrincipled(MatPrincipled),
     MatGlass(MatGlass),
     MatEmission(MatEmission),
-    MatBounceDebug(MatBounceDebug),
 }
 
 impl MaterialTrait for Material {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
         match self {
             Material::MatEmission(mat) => mat.scatter(ray_in, hit),
-            Material::MatNormalDebug(mat) => mat.scatter(ray_in, hit),
-            Material::MatFaceDebug(mat) => mat.scatter(ray_in, hit),
             Material::MatLambertDiffuse(mat) => mat.scatter(ray_in, hit),
             Material::MatPrincipled(mat) => mat.scatter(ray_in, hit),
             Material::MatGlass(mat) => mat.scatter(ray_in, hit),
-            Material::MatBounceDebug(mat) => mat.scatter(ray_in, hit),
         }
     }
 
@@ -53,89 +47,6 @@ impl Distribution<Material> for rand::distr::StandardUniform {
             2 => Material::MatLambertDiffuse(MatLambertDiffuse::random_instance()),
             _ => Material::MatPrincipled(MatPrincipled::random_instance()),
         }
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct MatNormalDebug {}
-
-impl MaterialTrait for MatNormalDebug {
-    #[allow(unused_variables)]
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        let color = if hit.front_face {
-            (hit.normal + 1.0) * 0.5
-        } else {
-            (-hit.normal + 1.0) * 0.5
-        };
-
-        (None, Some(color))
-    }
-
-    fn random_instance() -> Self {
-        MatNormalDebug {}
-    }
-}
-
-impl MatNormalDebug {
-    pub fn new() -> Material {
-        Material::MatNormalDebug(MatNormalDebug::default())
-    }
-}
-
-#[derive(Default, Clone)]
-pub struct MatFaceDebug {}
-
-impl MaterialTrait for MatFaceDebug {
-    #[allow(unused_variables)]
-    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        let color = if hit.front_face {
-            Color::new(0.0, 1.0, 0.0)
-        } else {
-            Color::new(1.0, 0.0, 0.0)
-        };
-        (None, Some(color))
-    }
-
-    fn random_instance() -> Self {
-        MatFaceDebug {}
-    }
-}
-
-impl MatFaceDebug {
-    pub fn new() -> Material {
-        Material::MatFaceDebug(MatFaceDebug::default())
-    }
-}
-
-#[derive(Clone)]
-pub struct MatBounceDebug {
-    limit: u32,
-}
-
-impl MatBounceDebug {
-    pub fn new(limit: u32) -> Material {
-        Material::MatBounceDebug(MatBounceDebug { limit: limit })
-    }
-}
-
-impl MaterialTrait for MatBounceDebug {
-    fn scatter(&self, _ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        static COLOR_RED: Color = Vec3f::new(1.0, 0.0, 0.0);
-        static COLOR_LOW: Color = Vec3f::new(0.0, 0.0, 0.0);
-        static COLOR_HIGH: Color = Vec3f::new(1.0, 1.0, 1.0);
-        let color = if hit.num_bounces >= self.limit {
-            COLOR_RED
-        } else {
-            let t = hit.num_bounces as Float / (self.limit - 1) as Float;
-            COLOR_LOW.lerp(COLOR_HIGH, t)
-        };
-
-        (None, Some(color))
-    }
-
-    fn random_instance() -> Self {
-        // Does not really make sense to do something actually random here
-        MatBounceDebug { limit: 32 }
     }
 }
 

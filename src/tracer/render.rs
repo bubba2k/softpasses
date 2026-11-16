@@ -9,7 +9,7 @@ use crate::math::ray::Ray;
 use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float, vec3_from_dvec3};
 use crate::tracer::camera::Camera;
-use crate::tracer::hittable::{Hittable, HittableTrait, RayInfo};
+use crate::tracer::hittable::{Hittable, HittableTrait};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::World;
 use std::collections::HashMap;
@@ -30,7 +30,6 @@ pub trait RenderPipeline<const N: usize> {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        ray_info: &RayInfo,
     ) -> [Color; N];
 
     /// Return the average of the accumulated samples.
@@ -42,7 +41,6 @@ pub trait RenderPipeline<const N: usize> {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        ray_info: &RayInfo,
     );
 
     /// Returns the name of the passes in order.
@@ -79,9 +77,8 @@ impl RenderPipeline<3> for DefaultPipeline {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        ray_info: &RayInfo,
     ) {
-        let sample = Self::trace_sample(ray, settings, world, ray_info);
+        let sample = Self::trace_sample(ray, settings, world);
         for i in 0..3 {
             self.sums[i] += DVec3::from(sample[i]);
         }
@@ -110,7 +107,6 @@ impl RenderPipeline<3> for DefaultPipeline {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        ray_info: &RayInfo,
     ) -> [Color; 3] {
         static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
         // Initialize ray_color to the multiplicative neutral element.
@@ -132,7 +128,7 @@ impl RenderPipeline<3> for DefaultPipeline {
             if let Some(hit) =
                 world
                     .objects_bvh
-                    .try_hit(&current_ray, &settings.ray_limits, ray_info)
+                    .try_hit(&current_ray, &settings.ray_limits)
             {
                 // The albedo and normal are computed exactly ONCE on the very first bounce.
                 if bounce_counter == 0 {
@@ -229,9 +225,8 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        ray_info: &RayInfo,
     ) {
-        let sample = Self::trace_sample(ray, settings, world, ray_info);
+        let sample = Self::trace_sample(ray, settings, world);
 
         for i in 0..3 {
             self.sums[i] += DVec3::from(sample[i]);
@@ -244,7 +239,6 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         ray: &Ray,
         settings: &RenderSettings,
         world: &World,
-        _ray_info: &RayInfo,
     ) -> [Color; 3] {
         let mut passes: [u32; 3] = [0, 0, 0];
         // Remember:
@@ -307,9 +301,8 @@ pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
                     .viewport
                     .ray_at_uv(u + rnd_offset_x, v + rnd_offset_y, ray_origin);
 
-                let ray_info = RayInfo { num_bounces: 0 };
 
-                renderpass.accumulate_sample(&ray, &settings, &world, &ray_info);
+                renderpass.accumulate_sample(&ray, &settings, &world);
             }
             renderpass
                 .yield_estimate()

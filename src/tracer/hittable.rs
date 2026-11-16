@@ -5,17 +5,18 @@ use crate::math::util::Interval;
 use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
 use crate::tracer;
 
-pub struct RayInfo {
-    pub num_bounces: u32,
-}
-
+/// Contains 
 pub struct HitRecord {
-    pub point: Vec3f,       // Point at which the surface was hit
-    pub normal: Vec3f,      // Normal of the surface at intersection point
-    pub num_bounces: u32,   // How many times the ray has bounced so far
+    /// The point at which the surface was hit in world coordinates.
+    pub point: Vec3f,
+    /// Normal of the surface at intersection point in world coordinates.
+    pub normal: Vec3f,
+    /// The material of the surface that was hit.
     pub material: Material,
+    /// The distance traveled by the ray to hit this surface.
     pub t: Float,
-    pub front_face: bool,   // True if ray hit the front of a face/surface. False if ray is on inside
+    /// Indicates whether the front face of a surface was hit. 
+    pub front_face: bool,
 }
 
 impl<'a> HitRecord {
@@ -23,7 +24,6 @@ impl<'a> HitRecord {
         ray: &Ray,
         t_hit: Float,
         point_hit: Vec3f,
-        num_bounces: u32,
         obj_mat: &'a Material,
         obj_normal: Vec3f,
     ) -> Self {
@@ -34,7 +34,6 @@ impl<'a> HitRecord {
                 point: point_hit,
                 normal: -obj_normal,
                 material: obj_mat.clone(),
-                num_bounces,
                 t: t_hit,
                 front_face: false,
             }
@@ -44,7 +43,6 @@ impl<'a> HitRecord {
                 point: point_hit,
                 normal: obj_normal,
                 material: obj_mat.clone(),
-                num_bounces: num_bounces,
                 t: t_hit,
                 front_face: true,
             }
@@ -52,16 +50,23 @@ impl<'a> HitRecord {
     }
 }
 
+/// Trait given to all objects that can be hit by a ray.
 pub trait HittableTrait {
-    // The meat and bones. Detect hits from rays.
-    // num_bounces: How many time this ray has bounced already.
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord>;
+    /// Check if the given ray hits this object.
+    /// 
+    /// # Arguments
+    /// `ray` - The potentially intersecting ray.
+    /// `t_interval` - The minimum and maximum distance along the ray for the hit to count. Hits outside the range will be discarded.
+    /// `ray_info` - Additional info on the ray.
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord>;
 
+    /// Get the axis aligned bounding box this object.
     fn get_aabb(&self) -> AABoundingBox;
 
-    // Return how many objects the hittable is made of. Just for bookkeepin'
+    /// Return how many primitive objects the object is made of. 
     fn num_primitives(&self) -> u32;
 
+    /// Return the centroid of the object.
     fn centroid(&self) -> Vec3f;
 }
 
@@ -145,17 +150,17 @@ impl HittableTrait for Hittable {
         }
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         match self {
-            Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval, ray_info),
+            Hittable::Sphere(sphere) => sphere.try_hit(ray, t_interval),
             Hittable::Parallelepiped(parallelepiped) => {
-                parallelepiped.try_hit(ray, t_interval, ray_info)
+                parallelepiped.try_hit(ray, t_interval)
             }
             Hittable::Parallelogram(parallelogram) => {
-                parallelogram.try_hit(ray, t_interval, ray_info)
+                parallelogram.try_hit(ray, t_interval)
             }
-            Hittable::Plane(plane) => plane.try_hit(ray, t_interval, ray_info),
-            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.try_hit(ray, t_interval, ray_info),
+            Hittable::Plane(plane) => plane.try_hit(ray, t_interval),
+            Hittable::BVHMesh(bvh_mesh) => bvh_mesh.try_hit(ray, t_interval),
         }
     }
 }
@@ -272,7 +277,7 @@ impl HittableList {
 }
 
 impl HittableTrait for HittableList {
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         // Abort if the ray does not hit this lists bounding box (TODO: This seems to worsen performance,
         // so it is turned off for now.)
         // if !self.aabb.hit(ray, t_interval)  { return None; }
@@ -281,7 +286,7 @@ impl HittableTrait for HittableList {
         // smallest t.
         self.list
             .iter()
-            .map(|x| x.try_hit(ray, t_interval, ray_info))
+            .map(|x| x.try_hit(ray, t_interval))
             .flatten()
             .min_by(|x, y| x.t.total_cmp(&y.t))
     }
@@ -324,7 +329,7 @@ impl Transformable for Sphere {
 }
 
 impl HittableTrait for Sphere {
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         if let Some(t_hit) = hit_sphere(ray, &self.center, self.radius) {
             if t_interval.contains(&t_hit) {
                 let point_hit = ray.at(t_hit);
@@ -334,7 +339,6 @@ impl HittableTrait for Sphere {
                     ray,
                     t_hit,
                     point_hit,
-                    ray_info.num_bounces,
                     &self.material,
                     sphere_normal,
                 ))
@@ -410,7 +414,7 @@ impl Transformable for Plane {
 }
 
 impl HittableTrait for Plane {
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -427,7 +431,6 @@ impl HittableTrait for Plane {
                 ray,
                 t_intersect,
                 p_intersect,
-                ray_info.num_bounces,
                 &self.material,
                 self.normal,
             ))
@@ -594,7 +597,7 @@ impl HittableTrait for Parallelogram {
     // 1. Finding intersect point between ray and the plane the rect lies on
     // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
     //    then perform a 2D Point-Contains-Polygon Check
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         // Abort if parallel
         if self.normal.dot(ray.dir) == 0.0 {
             return None;
@@ -631,7 +634,6 @@ impl HittableTrait for Parallelogram {
                     ray,
                     t_intersect,
                     p_intersect,
-                    ray_info.num_bounces,
                     &self.material,
                     self.normal,
                 ))
@@ -686,8 +688,8 @@ impl HittableTrait for Parallelepiped {
         self.list.get_aabb()
     }
 
-    fn try_hit(&self, ray: &Ray, t_interval: &Interval, ray_info: &RayInfo) -> Option<HitRecord> {
-        self.list.try_hit(ray, t_interval, ray_info)
+    fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
+        self.list.try_hit(ray, t_interval)
     }
 
     fn centroid(&self) -> Vec3f {
@@ -828,7 +830,6 @@ impl HittableTrait for Triangle {
         &self,
         _ray: &Ray,
         _t_interval: &Interval,
-        _ray_info: &RayInfo,
     ) -> Option<HitRecord> {
         // Since the triangles are used only inside BVHMesh, this should never be used.
         todo!()

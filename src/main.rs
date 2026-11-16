@@ -20,8 +20,7 @@ use tracer::camera::{self, Camera};
 #[allow(unused_imports)]
 use tracer::hittable::{Hittable, Parallelepiped, Plane, Sphere};
 #[allow(unused_imports)]
-use tracer::material::{
-    MatBounceDebug, MatFaceDebug, MatGlass, MatLambertDiffuse, MatNormalDebug, MatPrincipled,
+use tracer::material::{ MatGlass, MatLambertDiffuse, MatPrincipled,
     Material, MaterialTrait,
 };
 
