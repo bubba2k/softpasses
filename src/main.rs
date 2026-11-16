@@ -25,6 +25,37 @@ use tracer::material::{
     Material, MaterialTrait,
 };
 
+fn sponza_scene_setup() -> (World, Camera, RenderSettings) {
+    let mat_wall = MatLambertDiffuse::new(vec3(0.9, 0.9, 1.0));
+    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/sponza_merged.obj"), mat_wall);
+
+    let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
+    let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
+
+    let objects = vec![ sponza ];
+    let world = World::new(objects, background);
+
+    // Camera setup
+    let width: u32 = 1920 / 1;
+    let height: u32 = 1080 / 1;
+    let aspect_ratio: Float = width as Float / height as Float;
+
+    let render_settings = tracer::render::RenderSettings {
+        samples_per_pixel: 1,
+        max_bounces: 5,
+        image_width: width,
+        image_height: height,
+        ray_limits: Interval::new(0.001, 1000.0),
+    };
+
+    let pose = camera::Pose::look_at(Vec3f::new(0.0, 1.0, 1.0), Vec3f::new(0.0, 0.0, 1.0));
+    let lens = camera::Lens::new(15, 20, aspect_ratio, 0.0, 0.0);
+
+    let camera = Camera::new(pose, lens);
+
+    return (world, camera, render_settings);
+}
+
 fn glass_bunny_scene_setup() -> (World, Camera, RenderSettings) {
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_mirror = MatPrincipled::new(vec3(0.9, 0.9, 0.9), 1.0, 0.01);

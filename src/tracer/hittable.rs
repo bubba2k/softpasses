@@ -10,12 +10,12 @@ pub struct RayInfo {
 }
 
 pub struct HitRecord {
-    pub point: Vec3f,
-    pub normal: Vec3f,
-    pub num_bounces: u32, // How many times the ray has bounced so far
+    pub point: Vec3f,       // Point at which the surface was hit
+    pub normal: Vec3f,      // Normal of the surface at intersection point
+    pub num_bounces: u32,   // How many times the ray has bounced so far
     pub material: Material,
     pub t: Float,
-    pub front_face: bool, // True if ray hit the front of a face/surface. False if ray is on inside
+    pub front_face: bool,   // True if ray hit the front of a face/surface. False if ray is on inside
 }
 
 impl<'a> HitRecord {
