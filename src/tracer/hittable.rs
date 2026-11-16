@@ -199,7 +199,7 @@ impl AABoundingBox {
         }
     }
 
-    // Ray-box intersection using slabs method
+    /// Ray-box intersection using slabs method
     pub fn hit(&self, ray: &Ray, t_interval: &Interval) -> bool {
         let mut tmin = *t_interval.start();
         let mut tmax = *t_interval.end();
@@ -221,6 +221,12 @@ impl AABoundingBox {
         true
     }
 
+    /// Compute if an intersection occurs between the ray and AABB (slabs method),
+    /// and if yes, return the distance `t` along the ray
+    /// 
+    /// # Arguments
+    /// ray - The ray.
+    /// t_interval - The interval the value of t must be inside of to be a valid hit.
     pub fn dist(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         let mut tmin = *t_interval.start();
         let mut tmax = *t_interval.end();

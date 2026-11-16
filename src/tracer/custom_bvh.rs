@@ -67,6 +67,11 @@ fn eval_sah<T: HittableTrait>(
         }
     }
 
+    // Reject empty areas
+    if left_count == 0 || right_count == 0 {
+        return Float::INFINITY;
+    }
+
     let aabb_area = |aabb: &AABoundingBox| {
         let extent = aabb.extent();
         // Due to the way AABBounding::default() is implemented, an empty AABB
@@ -136,6 +141,9 @@ fn subdivide<T: HittableTrait>(
     next_free_index: &mut u32,
 ) {
     let node = &mut bvh_nodes[bvh_node_index as usize];
+
+    // Don't split singleton leaves
+    if node.num_prims == 1 { return; }
 
     // At the begin of a node split, the `first` member always points to the first primitive contained by the node.
     // -> The node is currently still "treated as a leaf". We only split
@@ -478,7 +486,7 @@ impl<T: HittableTrait> BVH<T> {
         while let Some((node_idx, node_dist)) = to_discover.pop() {
             // Traverse the bvh
 
-            // If this nodes is *behind* the currently best t, we do not need to check it further.
+            // If this nodes AABB is hit *behind* the currently best t, we do not need to check it further.
             if node_dist > best_t {
                 continue;
             }
@@ -486,7 +494,7 @@ impl<T: HittableTrait> BVH<T> {
             let node = &self.nodes[node_idx];
 
             // A node is a leaf if it contains more than 0 prims
-            if node.num_prims > 0 {
+            if node.num_prims > 0 { // LEAF NODE
                 // Determine the closest primitve hit inside this leaf node.
                 // Since we are doing an ordered traverse (from nodes closest to furthest to camera),
                 // we know that we have definitely found the closest hit, if there is one.
@@ -509,7 +517,7 @@ impl<T: HittableTrait> BVH<T> {
                         best_prim_idx = t_hit.0 as usize;
                     }
                 }
-            } else {
+            } else { // INTERIOR NODE
                 // Node is interior, check whether we care about its children
                 // Remember: We want to go for the _closest_ nodes first, and we ignore all nodes whose
                 // AABB is not hit.
