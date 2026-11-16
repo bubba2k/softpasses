@@ -6,6 +6,8 @@ use crate::math::ray::Ray;
 use crate::math::util;
 use crate::math::vector::{Color, Float, Vec3f, vec3};
 
+pub type MaterialID = u32;
+
 pub trait MaterialTrait {
     // Returns None if the ray was absorbed.
     // Else, returns a new (scattered) ray and color attenuation

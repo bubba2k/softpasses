@@ -1,21 +1,24 @@
 use crate::math::vector::{Color, Float, Vec3f};
+use crate::tracer::material::Material;
 use crate::tracer::custom_bvh::BVH;
 use crate::tracer::hittable::Hittable;
 use crate::tracer::texture::Texture;
 
 #[derive(Clone)]
-pub struct World {
+pub struct Scene {
     pub objects_bvh: BVH<Hittable>,
+    pub materials: Vec<Material>,
     pub background: Background,
 }
 
-impl World {
-    pub fn new(objects: Vec<Hittable>, background: Background) -> Self {
+impl Scene {
+    pub fn new(objects: Vec<Hittable>, materials: Vec<Material>, background: Background) -> Self {
         let bvh = BVH::new(objects);
 
-        World {
+        Scene {
             objects_bvh: bvh,
             background,
+            materials
         }
     }
 }

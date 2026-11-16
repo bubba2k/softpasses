@@ -11,7 +11,7 @@ use crate::tracer::pipelines::{BVHDebugPipeline, DefaultPipeline};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
-use crate::tracer::world::{Background, World};
+use crate::tracer::world::{Background, Scene};
 use math::transform::{Transform, Transformable};
 use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
@@ -21,18 +21,22 @@ use tracer::camera::{self, Camera};
 use tracer::hittable::{Hittable, Parallelepiped, Plane, Sphere};
 #[allow(unused_imports)]
 use tracer::material::{ MatGlass, MatLambertDiffuse, MatPrincipled,
-    Material, MaterialTrait,
+    Material, MaterialID
 };
 
-fn sponza_scene_setup() -> (World, Camera, RenderSettings) {
+fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     let mat_wall = MatLambertDiffuse::new(vec3(0.9, 0.9, 1.0));
-    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/sponza_merged.obj"), mat_wall);
+    let materials = vec![mat_wall];
+    const MAT_WALL: MaterialID = 0;
+
+
+    let sponza = BVHMesh::from_obj_file(Path::new("assets/models/sponza_merged.obj"), MAT_WALL);
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
     let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
 
     let objects = vec![ sponza ];
-    let world = World::new(objects, background);
+    let world = Scene::new(objects, materials, background);
 
     // Camera setup
     let width: u32 = 1920 / 1;
@@ -55,18 +59,24 @@ fn sponza_scene_setup() -> (World, Camera, RenderSettings) {
     return (world, camera, render_settings);
 }
 
-fn glass_bunny_scene_setup() -> (World, Camera, RenderSettings) {
+fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_mirror = MatPrincipled::new(vec3(0.9, 0.9, 0.9), 1.0, 0.01);
     let mat_table = MatLambertDiffuse::new(vec3(0.18, 0.18, 0.2));
     let mat_wall = MatLambertDiffuse::new(vec3(0.18, 0.25, 0.2));
+
+    let materials = vec![mat_glass, mat_mirror, mat_table, mat_wall];
+    const MAT_GLASS: MaterialID     = 0;
+    const MAT_MIRROR: MaterialID    = 1;
+    const MAT_TABLE: MaterialID     = 2;
+    const MAT_WALL: MaterialID      = 3;
 
     let table = Parallelepiped::new(
         vec3(-3.0, -1.0, -1.0),
         vec3(2.0, -1.0, -1.0),
         vec3(-3.0, -1.0, 1.0),
         vec3(-3.0, 0.0, -1.0),
-        mat_table,
+        MAT_TABLE,
     );
 
     let right_wall = Parallelepiped::new(
@@ -74,19 +84,19 @@ fn glass_bunny_scene_setup() -> (World, Camera, RenderSettings) {
         vec3(2.0, 0.0, -1.0),
         vec3(1.0, 0.0, 1.0),
         vec3(1.0, 3.0, -1.0),
-        mat_wall,
+        MAT_WALL,
     );
 
-    let sphere1_outer: Hittable = Sphere::new(vec3(-1.3, 0.501, -0.4), 0.5, mat_mirror);
+    let sphere1_outer: Hittable = Sphere::new(vec3(-1.3, 0.501, -0.4), 0.5, MAT_MIRROR);
 
-    let model1 = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), mat_glass);
+    let model1 = BVHMesh::from_obj_file(Path::new("assets/models/bunny.obj"), MAT_GLASS);
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
     let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
 
     let objects = vec![model1, sphere1_outer, right_wall, table];
 
-    let world = World::new(objects, background);
+    let world = Scene::new(objects, materials, background);
 
     // Camera setup
     let width: u32 = 1920 / 1;
@@ -109,28 +119,31 @@ fn glass_bunny_scene_setup() -> (World, Camera, RenderSettings) {
     return (world, camera, render_settings);
 }
 
-fn stanford_dragon_scene_setup() -> (World, Camera, RenderSettings) {
+fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     // World setup
     let mat_table = MatLambertDiffuse::new(Vec3f::new(0.651, 0.541, 0.451));
-
     let mat_metal = MatPrincipled::new(vec3(0.806, 0.351, 0.959), 0.9, 0.1);
+
+    let materials = vec![mat_table, mat_metal];
+    const MAT_TABLE: MaterialID = 0;
+    const MAT_METAL: MaterialID = 1;
 
     let table = Parallelepiped::new(
         vec3(-1.5, -1.0, -1.0),
         vec3(1.5, -1.0, -1.0),
         vec3(-1.5, -1.0, 1.0),
         vec3(-1.5, 0.0, -1.0),
-        mat_table,
+        MAT_TABLE,
     );
 
-    let object = BVHMesh::from_obj_file(Path::new("assets/models/dragon.obj"), mat_metal);
+    let object = BVHMesh::from_obj_file(Path::new("assets/models/dragon.obj"), MAT_METAL);
 
     let objects = vec![object, table];
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/apartmentbalcony_4k.exr")).unwrap();
     let background = Background::from_environment_texture(env_texture, std::f32::consts::PI, 1.0);
 
-    let world = World::new(objects, background);
+    let world = Scene::new(objects, materials, background);
 
     // Camera setup
     let width: u32 = 1920 / 1;

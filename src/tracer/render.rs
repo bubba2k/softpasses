@@ -6,7 +6,7 @@ use crate::math::vector::{Color, Float};
 use crate::tracer::camera::Camera;
 use crate::tracer::hittable::{Hittable, HittableTrait};
 use crate::tracer::texture::Texture;
-use crate::tracer::world::World;
+use crate::tracer::world::Scene;
 use std::collections::HashMap;
 use crate::tracer::pipelines::RenderPipeline;
 
@@ -14,7 +14,7 @@ use crate::tracer::pipelines::RenderPipeline;
 pub fn render_region_with_pass<const N: usize, RP: RenderPipeline<N> + Default>(
     cam: &Camera,
     settings: &RenderSettings,
-    world: &World,
+    world: &Scene,
     region: util::ImageRegion,
 ) -> [Vec<Color>; N] {
     let mut renderpass: RP = RP::default();
@@ -143,13 +143,13 @@ pub trait Scheduler {
         &self,
         camera: &Camera,
         settings: RenderSettings,
-        world: &World,
+        world: &Scene,
     ) -> [Vec<Color>; N];
 
     fn estimate_render_time<RP: RenderPipeline<N> + Default, const N: usize>(
         &self,
         camera: &Camera,
-        world: &World,
+        world: &Scene,
         settings: &RenderSettings,
     ) {
         // Attempt to get a somewhat accurate estimate of the total render time here.
@@ -183,7 +183,7 @@ pub trait Scheduler {
         &self,
         camera: Camera,
         settings: RenderSettings,
-        world: &World,
+        world: &Scene,
     ) -> RenderResult {
         // Rougly estimate render time here
         self.estimate_render_time::<RP, N>(&camera, world, &settings);
@@ -229,7 +229,7 @@ impl Scheduler for TiledScheduler {
         &self,
         camera: &Camera,
         settings: RenderSettings,
-        world: &World,
+        world: &Scene,
     ) -> [Vec<Color>; N] {
         // Clamp tile size to minimum of 1 and maximum of image width.
         // -> This way, at least 1 tile fits entirely into the image.

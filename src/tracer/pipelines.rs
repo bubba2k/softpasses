@@ -4,9 +4,9 @@ use glam::DVec3;
 
 use super::material::MaterialTrait;
 use crate::math::ray::Ray;
-use crate::math::vector::{Color, Float, vec3_from_dvec3};
+use crate::math::vector::{Color, vec3_from_dvec3};
 use crate::tracer::hittable::{Hittable, HittableTrait};
-use crate::tracer::world::World;
+use crate::tracer::world::Scene;
 
 use crate::tracer::render::RenderSettings;
 
@@ -28,7 +28,7 @@ pub trait RenderPipeline<const N: usize> {
     fn trace_sample(
         ray: &Ray,
         settings: &RenderSettings,
-        world: &World,
+        world: &Scene,
     ) -> [Color; N];
 
     /// Return the average of the accumulated samples.
@@ -39,7 +39,7 @@ pub trait RenderPipeline<const N: usize> {
         &mut self,
         ray: &Ray,
         settings: &RenderSettings,
-        world: &World,
+        world: &Scene,
     );
 
     /// Returns the name of the passes in order.
@@ -75,7 +75,7 @@ impl RenderPipeline<3> for DefaultPipeline {
         &mut self,
         ray: &Ray,
         settings: &RenderSettings,
-        world: &World,
+        world: &Scene,
     ) {
         let sample = Self::trace_sample(ray, settings, world);
         for i in 0..3 {
@@ -105,7 +105,7 @@ impl RenderPipeline<3> for DefaultPipeline {
     fn trace_sample(
         ray: &Ray,
         settings: &RenderSettings,
-        world: &World,
+        world: &Scene,
     ) -> [Color; 3] {
         static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
         // Initialize ray_color to the multiplicative neutral element.
@@ -129,6 +129,9 @@ impl RenderPipeline<3> for DefaultPipeline {
                     .objects_bvh
                     .try_hit(&current_ray, &settings.ray_limits)
             {
+                // Get a reference to the actual material
+                let hit_material = &world.materials[hit.material_id as usize];
+
                 // The albedo and normal are computed exactly ONCE on the very first bounce.
                 if bounce_counter == 0 {
                     ray_normal = if hit.front_face {
@@ -137,13 +140,13 @@ impl RenderPipeline<3> for DefaultPipeline {
                         -hit.normal
                     };
 
-                    ray_albedo = match hit.material.scatter(ray, &hit) {
+                    ray_albedo = match hit_material.scatter(ray, &hit) {
                         (_, Some(color)) => color,
                         (_, None) => COLOR_BLACK,
                     };
                 }
 
-                match hit.material.scatter(&current_ray, &hit) {
+                match hit_material.scatter(&current_ray, &hit) {
                     (Some(scatter_ray), Some(color_att)) => {
                         // Fire the reflected/scattered ray we got from the material and surface information.
                         // Attenuate with the color attenuation applied by the material.
@@ -223,7 +226,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         &mut self,
         ray: &Ray,
         settings: &RenderSettings,
-        world: &World,
+        world: &Scene,
     ) {
         let sample = Self::trace_sample(ray, settings, world);
 
@@ -237,7 +240,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
     fn trace_sample(
         ray: &Ray,
         settings: &RenderSettings,
-        world: &World,
+        world: &Scene,
     ) -> [Color; 3] {
         let mut passes: [u32; 3] = [0, 0, 0];
         // Remember:

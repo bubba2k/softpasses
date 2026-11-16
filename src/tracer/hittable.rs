@@ -1,4 +1,4 @@
-use super::material::Material;
+use super::material::MaterialID;
 use crate::math::ray::Ray;
 use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
@@ -12,7 +12,7 @@ pub struct HitRecord {
     /// Normal of the surface at intersection point in world coordinates.
     pub normal: Vec3f,
     /// The material of the surface that was hit.
-    pub material: Material,
+    pub material_id: MaterialID,
     /// The distance traveled by the ray to hit this surface.
     pub t: Float,
     /// Indicates whether the front face of a surface was hit. 
@@ -24,7 +24,7 @@ impl<'a> HitRecord {
         ray: &Ray,
         t_hit: Float,
         point_hit: Vec3f,
-        obj_mat: &'a Material,
+        obj_mat_id: MaterialID,
         obj_normal: Vec3f,
     ) -> Self {
         // Check whether we hit the inside or outside
@@ -33,7 +33,7 @@ impl<'a> HitRecord {
             HitRecord {
                 point: point_hit,
                 normal: -obj_normal,
-                material: obj_mat.clone(),
+                material_id: obj_mat_id,
                 t: t_hit,
                 front_face: false,
             }
@@ -42,7 +42,7 @@ impl<'a> HitRecord {
             HitRecord {
                 point: point_hit,
                 normal: obj_normal,
-                material: obj_mat.clone(),
+                material_id: obj_mat_id,
                 t: t_hit,
                 front_face: true,
             }
@@ -309,15 +309,15 @@ impl HittableTrait for HittableList {
 pub struct Sphere {
     pub center: Vec3f,
     pub radius: Float,
-    pub material: Material,
+    pub material_id: MaterialID,
 }
 
 impl Sphere {
-    pub fn new(c: Vec3f, r: Float, material: Material) -> Hittable {
+    pub fn new(center: Vec3f, radius: Float, material_id: MaterialID) -> Hittable {
         Hittable::Sphere(Sphere {
-            center: c,
-            radius: r,
-            material: material,
+            center,
+            radius,
+            material_id,
         })
     }
 }
@@ -339,7 +339,7 @@ impl HittableTrait for Sphere {
                     ray,
                     t_hit,
                     point_hit,
-                    &self.material,
+                    self.material_id,
                     sphere_normal,
                 ))
             } else {
@@ -371,20 +371,20 @@ pub struct Plane {
     // The plane in HNF
     normal: Vec3f,
     d: Float, // Distance from origin
-    material: Material,
+    material_id: MaterialID,
 }
 
 #[allow(dead_code)]
 impl Plane {
-    pub fn new(normal: Vec3f, d: Float, mat: Material) -> Hittable {
+    pub fn new(normal: Vec3f, d: Float, material_id: MaterialID) -> Hittable {
         Hittable::Plane(Plane {
             normal: normal,
             d: d,
-            material: mat,
+            material_id,
         })
     }
 
-    pub fn from_points(botleft: Vec3f, topleft: Vec3f, botright: Vec3f, mat: Material) -> Self {
+    pub fn from_points(botleft: Vec3f, topleft: Vec3f, botright: Vec3f, material_id: MaterialID) -> Self {
         let right = botright - botleft;
         let up = topleft - botleft;
 
@@ -400,7 +400,7 @@ impl Plane {
         };
 
         Plane {
-            material: mat,
+            material_id,
             normal: normal,
             d: signed_distance,
         }
@@ -431,7 +431,7 @@ impl HittableTrait for Plane {
                 ray,
                 t_intersect,
                 p_intersect,
-                &self.material,
+                self.material_id,
                 self.normal,
             ))
         }
@@ -465,7 +465,7 @@ pub struct Parallelogram {
     // The coordinate plane to project intersection point onto for bounds checking
     projection_plane: vector::CoordinatePlane,
 
-    material: Material,
+    material_id: MaterialID,
 }
 
 impl Transformable for Parallelogram {
@@ -479,7 +479,7 @@ impl Parallelogram {
         bottom_left: Vec3f,
         top_left: Vec3f,
         bottom_right: Vec3f,
-        mat: Material,
+        material_id: MaterialID,
     ) -> Hittable {
         // Together with `bottom_left`, these three letters form represent the plane in parametric form.
         let up = top_left - bottom_left;
@@ -587,7 +587,7 @@ impl Parallelogram {
             projected_bounds: projected_bounds,
             projection_plane: projection_plane.clone(),
 
-            material: mat,
+            material_id
         })
     }
 }
@@ -634,7 +634,7 @@ impl HittableTrait for Parallelogram {
                     ray,
                     t_intersect,
                     p_intersect,
-                    &self.material,
+                    self.material_id,
                     self.normal,
                 ))
             } else {
@@ -704,7 +704,7 @@ impl Parallelepiped {
         back_bottom_right: Vec3f,
         front_bottom_left: Vec3f,
         back_top_left: Vec3f,
-        material: Material,
+        material_id: MaterialID,
     ) -> Self {
         let up = back_top_left - back_bottom_left;
         let depth = front_bottom_left - back_bottom_left;
@@ -722,42 +722,42 @@ impl Parallelepiped {
             front_bottom_left,
             front_top_left,
             front_bottom_right,
-            material.clone(),
+            material_id,
         ));
         // Back face
         list.push(Parallelogram::from_points(
             back_bottom_left,
             back_top_left,
             back_bottom_right,
-            material.clone(),
+            material_id,
         ));
         // Top face
         list.push(Parallelogram::from_points(
             front_top_left,
             back_top_left,
             front_top_right,
-            material.clone(),
+            material_id,
         ));
         // Bottom face
         list.push(Parallelogram::from_points(
             back_bottom_left,
             front_bottom_left,
             back_bottom_right,
-            material.clone(),
+            material_id,
         ));
         // Left face
         list.push(Parallelogram::from_points(
             back_bottom_left,
             back_top_left,
             front_bottom_left,
-            material.clone(),
+            material_id,
         ));
         // Right face
         list.push(Parallelogram::from_points(
             back_bottom_right,
             back_top_right,
             front_bottom_right,
-            material.clone(),
+            material_id,
         ));
 
         Parallelepiped { list: list }
@@ -768,14 +768,14 @@ impl Parallelepiped {
         back_bottom_right: Vec3f,
         front_bottom_left: Vec3f,
         back_top_left: Vec3f,
-        material: Material,
+        material_id: MaterialID,
     ) -> Hittable {
         Hittable::Parallelepiped(Self::_new(
             back_bottom_left,
             back_bottom_right,
             front_bottom_left,
             back_top_left,
-            material,
+            material_id,
         ))
     }
 
@@ -784,7 +784,7 @@ impl Parallelepiped {
         right_dir: Vec3f,
         up_dir: Vec3f,
         size: Float,
-        material: Material,
+        material_id: MaterialID,
     ) -> Hittable {
         let depth_dir = up_dir.cross(right_dir).normalize();
 
@@ -797,7 +797,7 @@ impl Parallelepiped {
             back_bottom_right,
             front_bottom_left,
             back_top_left,
-            material,
+            material_id,
         );
         Hittable::Parallelepiped(p)
     }

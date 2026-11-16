@@ -1,5 +1,5 @@
 use super::hittable::{AABoundingBox, HitRecord, Hittable, HittableTrait, Triangle};
-use crate::Material;
+use crate::tracer::material::MaterialID;
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::{Float, Vec3f};
@@ -489,7 +489,7 @@ impl<T: Copy, const N: usize> StaticStack<T, N> {
 pub struct BVHMesh {
     triangles: Vec<Triangle>,
     nodes: Vec<BVHNode>,
-    material: Material,
+    material_id: crate::tracer::material::MaterialID,
 }
 
 pub struct BVHQueryResult {
@@ -524,19 +524,19 @@ impl Transformable for BVHMesh {
 }
 
 impl BVHMesh {
-    pub fn from_obj_file(path: &Path, material: Material) -> Hittable {
+    pub fn from_obj_file(path: &Path, material_id: MaterialID) -> Hittable {
         let triangles = crate::io::mesh::load_obj(path);
-        let bvh_mesh = Self::new(triangles, material);
+        let bvh_mesh = Self::new(triangles, material_id);
         Hittable::BVHMesh(bvh_mesh)
     }
 
-    fn new(triangles: Vec<Triangle>, material: Material) -> Self {
+    fn new(triangles: Vec<Triangle>, material_id: MaterialID) -> Self {
         let (triangles, bvh_nodes) = build_bvh(triangles);
 
         Self {
             triangles: triangles,
             nodes: bvh_nodes,
-            material: material,
+            material_id,
         }
     }
 
@@ -768,7 +768,7 @@ impl HittableTrait for BVHMesh {
                 &ray.step(0.01),
                 t_hit,
                 point_hit,
-                &self.material,
+                self.material_id,
                 obj_normal,
             ))
         } else {
