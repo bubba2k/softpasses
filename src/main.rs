@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use crate::postproc::{PostProcessSettings, postprocess};
 use crate::tracer::render::RenderSettings;
 #[allow(unused_imports)]
-use crate::tracer::render::{BVHDebugPipeline, DefaultPipeline};
+use crate::tracer::pipelines::{BVHDebugPipeline, DefaultPipeline};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
