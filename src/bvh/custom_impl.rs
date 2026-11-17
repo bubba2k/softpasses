@@ -14,7 +14,7 @@ struct BVHNode {
     aabb: AABoundingBox,
 }
 
-// Simplest way to split
+// Simplest way to split: exactly along the middle of the longest axis of the node
 #[allow(dead_code)]
 fn simple_midpoint_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Float) {
     let extent = node.aabb.extent();
@@ -72,8 +72,6 @@ fn eval_sah<T: HittableTrait>(
 
     let aabb_area = |aabb: &AABoundingBox| {
         let extent = aabb.extent();
-        // Due to the way AABBounding::default() is implemented, an empty AABB
-        // would reach from Vec3(INF) to Vec3(-INF). Check and catch that here.
         let area =
             2.0 * extent[0] * extent[1] + 2.0 * extent[0] * extent[2] + 2.0 * extent[1] * extent[2];
         area
@@ -97,7 +95,7 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
                 .map(|i| {
                     (
                         axis,
-                        axis_min + (axis_extent as f32) * (i as f32) / (num_positions as f32),
+                        axis_min + (axis_extent as f32) * ((i as f32) / (num_positions as f32)),
                     )
                 })
                 .collect::<Vec<(u32, Float)>>()
@@ -115,21 +113,7 @@ fn best_split<T: HittableTrait>(node: &BVHNode, primitives: &Vec<T>) -> (u32, Fl
         })
         .expect("Attempted to find best split on empty node");
 
-    // Find the primitive centroid that is closest to the lowest split previously computed.
-    // Otherwise, a split might not actually split at all!
-    let prim_indices = (node.first as usize)..((node.first + node.num_prims) as usize);
-    let actual_pos = primitives[prim_indices]
-        .iter()
-        .map(|prim| prim.centroid()[lowest_cost_split.0 as usize])
-        .min_by(|a, b| {
-            let diff_a = (lowest_cost_split.1 - a).abs();
-            let diff_b = (lowest_cost_split.1 - b).abs();
-
-            diff_a.total_cmp(&diff_b)
-        })
-        .expect("Attempted to find best split on empty node");
-
-    (lowest_cost_split.0, actual_pos)
+    (lowest_cost_split.0, lowest_cost_split.1)
 }
 
 fn subdivide<T: HittableTrait>(
@@ -149,6 +133,11 @@ fn subdivide<T: HittableTrait>(
         node.aabb.expand_aabb(&tri.get_aabb());
     }
 
+    // If this node already has less than N primitives, dont split it.
+    if node.num_prims < 3 {
+        return;
+    }
+
     // Determine the axis and the point on it to split
     // axis 0 -> x, 1 -> y, 2 -> z
     let (axis, split_value) = best_split(node, primitives);
@@ -165,19 +154,19 @@ fn subdivide<T: HittableTrait>(
         }
     }
 
-    // Initialize the two children nodes and go on to subidivide them
-    let left_idx = *next_free_index;
-    *next_free_index += 1;
-    let right_idx = *next_free_index;
-    *next_free_index += 1;
     let left_num = i as u32 - bvh_nodes[bvh_node_index as usize].first;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
 
-    // Handle degenerate splits
     if left_num == 0 || right_num == 0 {
-        // We do not want empty leaves! The straightforward approach is to simply abort subdivision here.
+        // If one of the split nodes would be empty, abort.
         return;
     } else {
+        // Initialize the two children nodes and go on to subidivide them
+        let left_idx = *next_free_index;
+        *next_free_index += 1;
+        let right_idx = *next_free_index;
+        *next_free_index += 1;
+
         bvh_nodes[left_idx as usize].first = bvh_nodes[bvh_node_index as usize].first;
         bvh_nodes[left_idx as usize].num_prims = left_num;
         bvh_nodes[right_idx as usize].first = i as u32;
