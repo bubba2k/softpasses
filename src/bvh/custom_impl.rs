@@ -1,11 +1,9 @@
-use super::hittable::{AABoundingBox, HitRecord, Hittable, HittableTrait, Triangle};
-use crate::tracer::material::MaterialID;
+use crate::bvh::{BvhTrait, QueryResult};
+use crate::tracer::hittable::{AABoundingBox, HitRecord, HittableTrait};
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
 use crate::{Float, Vec3f};
-use crate::{Transform, Transformable};
 use std::array;
-use std::path::Path;
 
 #[derive(Default, Clone)]
 struct BVHNode {
@@ -392,62 +390,33 @@ fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
 }
 
 #[derive(Clone)]
-pub struct BVH<T: HittableTrait> {
+pub struct BvhCustom<T: HittableTrait> {
     pub hittables: Vec<T>,
     nodes: Vec<BVHNode>,
 }
 
-impl<T: HittableTrait> HittableTrait for BVH<T> {
-    fn centroid(&self) -> Vec3f {
-        (self.get_aabb().max - self.get_aabb().min) * 0.5 + self.get_aabb().min
-    }
-
-    fn get_aabb(&self) -> AABoundingBox {
-        self.nodes[0].aabb.clone()
-    }
-
-    fn num_primitives(&self) -> u32 {
-        self.hittables
-            .iter()
-            .map(HittableTrait::num_primitives)
-            .sum()
-    }
-
-    fn try_intersect(&self, _ray: &Ray, _t_interval: &Interval) -> Option<Float> {
-        // This should theoretically never be used.
-        unimplemented!()
-    }
-
-    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
-        // This should theoretically never be used.
-        unimplemented!()
+impl<T: HittableTrait> BvhTrait for BvhCustom<T> {
+    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> QueryResult {
+        self.try_hit_ordered(ray, t_interval)
     }
 
     fn try_hit(&self, ray: &Ray, t_interval: &Interval) -> Option<HitRecord> {
         let query_result = self.try_hit_ordered(ray, t_interval);
         
         if let Some(hit) = query_result.hit {
-            // TODO: This has to change. 
             Some(self.hittables[hit.0].compute_hit(ray, hit.1))
         } else {
             None
         }
+    }
 
-
+    fn num_primitives(&self) -> usize {
+        self.hittables.len()
     }
 }
 
-pub struct BVHQueryResult {
-    /// The hit contains a tuple of the index of the hit primitve,
-    /// and the distance `t` from the ray origin the hit occured at.
-    pub hit: Option<(usize, Float)>,
-    pub num_aabb_checks: u32,
-    pub num_aabb_hits: u32,
-    pub num_primitive_checks: u32,
-}
-
-impl<T: HittableTrait> BVH<T> {
-    pub fn new(list: Vec<T>) -> BVH<T> {
+impl<T: HittableTrait> BvhCustom<T> {
+    pub fn new(list: Vec<T>) -> BvhCustom<T> {
         eprintln!("Building scene bvh");
 
         let (hittables, bvh_nodes) = build_bvh(list);
@@ -458,7 +427,7 @@ impl<T: HittableTrait> BVH<T> {
         }
     }
 
-    pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> BVHQueryResult {
+    pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> super::QueryResult {
         // Keep track of the nodes to discover here (DFS)
         // Try to preallocate a reasonably sized stack. Inside the stack, we save the near distance of
         // the aabb to the ray, and its index of course.
@@ -557,7 +526,7 @@ impl<T: HittableTrait> BVH<T> {
             None
         };
 
-        return BVHQueryResult {
+        return super::QueryResult {
             hit: hit,
             num_aabb_checks: num_aabb_checks,
             num_aabb_hits: num_aabb_intersects,

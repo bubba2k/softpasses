@@ -3,9 +3,9 @@ use std::array;
 use glam::DVec3;
 
 use super::material::MaterialTrait;
+use crate::bvh::BvhTrait;
 use crate::math::ray::Ray;
 use crate::math::vector::{Color, vec3_from_dvec3};
-use crate::tracer::hittable::{Hittable, HittableTrait};
 use crate::tracer::world::Scene;
 
 use crate::tracer::render::RenderSettings;
@@ -126,8 +126,7 @@ impl RenderPipeline<3> for DefaultPipeline {
             // Fire the ray. See if it hits anything.
             if let Some(hit) =
                 world
-                    .objects_bvh
-                    .try_hit(&current_ray, &settings.ray_limits)
+                    .objects_bvh.try_hit(&current_ray, &settings.ray_limits)
             {
                 // Get a reference to the actual material
                 let hit_material = &world.materials[hit.material_id as usize];

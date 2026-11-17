@@ -74,9 +74,6 @@ pub trait HittableTrait {
     /// Get the axis aligned bounding box this object.
     fn get_aabb(&self) -> AABoundingBox;
 
-    /// Return how many primitive objects the object is made of. 
-    fn num_primitives(&self) -> u32;
-
     /// Return the centroid of the object.
     fn centroid(&self) -> Vec3f;
 }
@@ -116,15 +113,6 @@ impl HittableTrait for Hittable {
             Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
             Hittable::Plane(plane) => plane.get_aabb(),
             Hittable::Triangle(triangle) => triangle.get_aabb(),
-        }
-    }
-
-    fn num_primitives(&self) -> u32 {
-        match self {
-            Hittable::Sphere(sphere) => sphere.num_primitives(),
-            Hittable::Parallelogram(parallelogram) => parallelogram.num_primitives(),
-            Hittable::Plane(plane) => plane.num_primitives(),
-            Hittable::Triangle(triangle) => triangle.num_primitives(),
         }
     }
 
@@ -317,10 +305,6 @@ impl HittableTrait for Sphere {
         }
     }
 
-    fn num_primitives(&self) -> u32 {
-        1
-    }
-
     fn centroid(&self) -> Vec3f {
         self.center
     }
@@ -405,10 +389,6 @@ impl HittableTrait for Plane {
         } else {
             Some(t_intersect)
         }
-    }
-
-    fn num_primitives(&self) -> u32 {
-        1
     }
 
     fn centroid(&self) -> Vec3f {
@@ -759,10 +739,6 @@ impl HittableTrait for Triangle {
             aabb.expand(point);
         }
         aabb
-    }
-
-    fn num_primitives(&self) -> u32 {
-        1
     }
 
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {

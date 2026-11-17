@@ -2,6 +2,8 @@ mod io;
 mod math;
 mod postproc;
 mod tracer;
+mod bvh;
+
 use std::path::{Path, PathBuf};
 
 use crate::postproc::{PostProcessSettings, postprocess};

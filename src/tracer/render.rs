@@ -1,10 +1,10 @@
 use itertools::Itertools;
 use rayon::prelude::*;
 
+use crate::bvh::BvhTrait;
 use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float};
 use crate::tracer::camera::Camera;
-use crate::tracer::hittable::{Hittable, HittableTrait};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::Scene;
 use std::collections::HashMap;
@@ -215,7 +215,7 @@ pub trait Scheduler {
             image_width: settings.image_width,
             num_samples: settings.samples_per_pixel,
             max_bounces: settings.max_bounces,
-            num_objects: world.objects_bvh.num_primitives(),
+            num_objects: world.objects_bvh.num_primitives() as u32,
         }
     }
 }

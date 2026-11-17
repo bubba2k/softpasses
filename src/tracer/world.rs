@@ -1,8 +1,9 @@
 use crate::math::vector::{Color, Float, Vec3f};
 use crate::tracer::material::Material;
-use crate::tracer::custom_bvh::BVH;
 use crate::tracer::hittable::{Hittable, HittableTrait};
 use crate::tracer::texture::Texture;
+
+type BvhImpl = crate::bvh::custom_impl::BvhCustom<Hittable>;
 
 pub struct SceneBuilder {
     pub hittables: Vec<Hittable>,
@@ -46,30 +47,17 @@ impl SceneBuilder {
 
     pub fn build(self) -> Scene {
         Scene {
-            objects_bvh: BVH::new(self.hittables),
+            objects_bvh: BvhImpl::new(self.hittables),
             materials: self.materials,
             background: self.background,
         }
     }
 }
 
-#[derive(Clone)]
 pub struct Scene {
-    pub objects_bvh: BVH<Hittable>,
+    pub objects_bvh: BvhImpl,
     pub materials: Vec<Material>,
     pub background: Background,
-}
-
-impl Scene {
-    fn new(objects: Vec<Hittable>, materials: Vec<Material>, background: Background) -> Self {
-        let bvh = BVH::new(objects);
-
-        Scene {
-            objects_bvh: bvh,
-            background,
-            materials
-        }
-    }
 }
 
 #[derive(Clone)]

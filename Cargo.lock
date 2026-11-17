@@ -319,17 +319,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
-name = "embree4-rs"
-version = "0.0.16"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e341924d321e528db1959d16d426de8df234966e32876e77f3db1bba851827d"
-dependencies = [
- "anyhow",
- "embree4-sys",
- "rayon",
-]
-
-[[package]]
 name = "embree4-sys"
 version = "0.0.10"
 source = "git+https://github.com/bubba2k/embree4-sys.git#b6b17c1d6d0add0d5fa35bb630eb8558db4aeedb"
@@ -1455,7 +1444,7 @@ name = "weekend_of_rays"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "embree4-rs",
+ "embree4-sys",
  "fastrand",
  "glam",
  "image",
