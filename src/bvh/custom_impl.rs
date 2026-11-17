@@ -426,7 +426,8 @@ impl<T: HittableTrait> BvhCustom<T> {
         // We use a statically sized stack here. This could cause some very mean issues
         // if the number of nodes we yet have to discover exceeds the capacity.
         // 64 cap should serve us well for now.
-        let mut to_discover = StaticStack::<(usize, Float), 64>::new((0, 0.0));
+        let mut candidate_queue = StaticPriorityQueue::<usize, Float, 64>::new(0, 0.0);
+
         // The closest primitive hit found so far
         let mut best_t = Float::INFINITY;
         let mut best_prim_idx: usize = 0;
@@ -438,18 +439,18 @@ impl<T: HittableTrait> BvhCustom<T> {
         // Start at the root node. We only push it on the stack if it is actually hit,
         // otherwise the algorithm just terminates right away.
         if let Some(dist) = self.nodes[0].aabb.dist(ray, t_interval) {
-            num_aabb_checks += 1;
             num_aabb_intersects += 1;
-            to_discover.push((0, dist));
-        } else {
-            num_aabb_checks += 1;
-        }
-        while let Some((node_idx, node_dist)) = to_discover.pop() {
+            candidate_queue.push(0, dist);
+        }                    
+        num_aabb_checks += 1;
+        num_aabb_intersects += 1;
+
+        while let Some((node_idx, node_dist)) = candidate_queue.pop() {
             // Traverse the bvh
 
             // If this nodes AABB is hit *behind* the currently best t, we do not need to check it further.
             if node_dist > best_t {
-                continue;
+                break;
             }
 
             let node = &self.nodes[node_idx];
@@ -479,36 +480,21 @@ impl<T: HittableTrait> BvhCustom<T> {
                     }
                 }
             } else { // INTERIOR NODE
-                // Node is interior, check whether we care about its children
-                // Remember: We want to go for the _closest_ nodes first, and we ignore all nodes whose
-                // AABB is not hit.
+                // Node is interior, check whether the ray intersects its children...
                 let (a, b) = (node.first as usize, (node.first + 1) as usize);
                 num_aabb_checks += 2;
-                match (
-                    self.nodes[a].aabb.dist(ray, t_interval),
-                    self.nodes[b].aabb.dist(ray, t_interval),
-                ) {
-                    (None, None) => {}
-                    (None, Some(dist_b)) => {
-                        to_discover.push((b, dist_b));
-                        num_aabb_intersects += 1;
+                if let Some(t) = self.nodes[a].aabb.dist(ray, t_interval) {
+                    num_aabb_intersects += 1;
+                    if t < best_t {
+                        candidate_queue.push(a, t);
                     }
-                    (Some(dist_a), None) => {
-                        to_discover.push((a, dist_a));
-                        num_aabb_intersects += 1;
+                }
+                if let Some(t) = self.nodes[b].aabb.dist(ray, t_interval) {
+                    num_aabb_intersects += 1;
+                    if t < best_t {
+                        candidate_queue.push(b, t);
                     }
-                    (Some(dist_a), Some(dist_b)) => {
-                        num_aabb_intersects += 2;
-
-                        if dist_a < dist_b {
-                            to_discover.push((b, dist_b));
-                            to_discover.push((a, dist_a));
-                        } else {
-                            to_discover.push((a, dist_a));
-                            to_discover.push((b, dist_b));
-                        }
-                    }
-                };
+                }
             }
         }
 
@@ -527,12 +513,59 @@ impl<T: HittableTrait> BvhCustom<T> {
     }
 }
 
+// A simple, statically allocated priority queue
+struct StaticPriorityQueue<V: Copy, P: Copy + PartialOrd, const N: usize> {
+    data: [(V,P); N],
+    stack_ptr: usize,
+}
+
+impl<V: Copy, P: Copy + PartialOrd, const N: usize> StaticPriorityQueue<V, P, N> {
+    pub fn new(fill_value: V, fill_priority: P) -> Self {
+        StaticPriorityQueue {
+            // TODO: It could have a slight performance advantage to leave
+            // the data uninitialized. Would require unsafe code.
+            data: array::from_fn(|_| (fill_value, fill_priority)),
+            stack_ptr: 0,
+        }
+    }
+
+    pub fn push(&mut self, value: V, prio: P) {
+        self.data[self.stack_ptr] = (value, prio);
+        self.stack_ptr += 1;
+    }
+
+    pub fn pop(&mut self) -> Option<(V, P)> {
+        if self.stack_ptr == 0 {
+            None
+        } else {
+            // Find the best element in the list
+            let mut best_idx = 0;
+            let mut best_prio = self.data[0].1;
+            for idx in 1..self.stack_ptr {
+                if self.data[idx].1 < best_prio {
+                    best_idx        = idx;
+                    best_prio   = self.data[idx].1;
+                }
+            }
+            let best_value = self.data[best_idx];
+
+            // Remove the element
+            self.stack_ptr -= 1;
+            self.data[best_idx] = self.data[self.stack_ptr];
+
+            Some(best_value)
+        }
+    }
+}
+
 // A statically sized stack that lives in stack memory instead of heap
+#[allow(unused)]
 struct StaticStack<T: Copy, const N: usize> {
     data: [T; N],
     stack_ptr: usize,
 }
 
+#[allow(unused)]
 impl<T: Copy, const N: usize> StaticStack<T, N> {
     fn new(fill: T) -> Self {
         StaticStack {
