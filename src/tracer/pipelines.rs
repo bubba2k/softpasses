@@ -247,7 +247,7 @@ impl RenderPipeline<3> for BVHDebugPipeline {
         // 1: "num_aabb_checks",
         // 2: "num_primitive_checks",
 
-        let query_result = scene.objects_bvh.try_hit_ordered(ray, &settings.ray_limits);
+        let query_result = scene.objects_bvh.try_intersect(ray, &settings.ray_limits);
             passes[0] = query_result.num_aabb_hits;
             passes[1] = query_result.num_aabb_checks;
             passes[2] = query_result.num_primitive_checks;

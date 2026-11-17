@@ -540,7 +540,9 @@ impl Parallelogram {
             material_id
         })
     }
+}
 
+impl HittableTrait for Parallelogram {
     fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
         HitRecord::new(
             ray,
@@ -613,10 +615,6 @@ impl Parallelogram {
         }
         aabb
     }
-
-    fn num_primitives(&self) -> u32 {
-        1
-    }
 }
 
 fn _new_parallelepiped(
@@ -683,7 +681,7 @@ fn _new_parallelepiped(
     hittables
 }
 
-pub fn new_parallelepiped(
+pub fn make_parallelepiped(
     back_bottom_left: Vec3f,
     back_bottom_right: Vec3f,
     front_bottom_left: Vec3f,
@@ -699,7 +697,8 @@ pub fn new_parallelepiped(
     )
 }
 
-pub fn new_cube(
+#[allow(unused)]
+pub fn make_cube(
     front_bottom_left: Vec3f,
     right_dir: Vec3f,
     up_dir: Vec3f,
@@ -822,34 +821,5 @@ impl Transformable for Triangle {
                 .unwrap(),
             ..self
         }
-    }
-}
-
-impl Triangle {
-    pub fn ray_intersection(&self, ray: &Ray, interval: &Interval) -> Option<Float> {
-        let (a, b, c) = (&self.positions[0], &self.positions[1], &self.positions[2]);
-        // Determine whether the ray is parallel
-        let edge1 = b - a;
-        let edge2 = c - a;
-        let h = ray.dir.cross(edge2);
-        let det = edge1.dot(h);
-        // If det is close to 0, the ray is parallel to the triangle
-        if det.abs() < 1e-8 {
-            return None;
-        }
-        let f = 1.0 / det;
-        let s = ray.orig - a;
-        let u = f * s.dot(h);
-        if u < 0.0 || u > 1.0 {
-            return None;
-        }
-        let q = s.cross(edge1);
-        let v = f * ray.dir.dot(q);
-        if v < 0.0 || u + v > 1.0 {
-            return None;
-        }
-        let t = f * edge2.dot(q);
-
-        if interval.contains(&t) { Some(t) } else { None }
     }
 }

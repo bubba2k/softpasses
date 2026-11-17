@@ -2,7 +2,7 @@ use crate::bvh::{BvhTrait, QueryResult};
 use crate::tracer::hittable::{AABoundingBox, HitRecord, HittableTrait};
 use crate::math::ray::Ray;
 use crate::math::util::Interval;
-use crate::{Float, Vec3f};
+use crate::{Float};
 use std::array;
 
 #[derive(Default, Clone)]
@@ -427,7 +427,7 @@ impl<T: HittableTrait> BvhCustom<T> {
         }
     }
 
-    pub fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> super::QueryResult {
+    fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> super::QueryResult {
         // Keep track of the nodes to discover here (DFS)
         // Try to preallocate a reasonably sized stack. Inside the stack, we save the near distance of
         // the aabb to the ray, and its index of course.

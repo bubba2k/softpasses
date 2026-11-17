@@ -7,7 +7,7 @@ mod bvh;
 use std::path::{Path, PathBuf};
 
 use crate::postproc::{PostProcessSettings, postprocess};
-use crate::tracer::hittable::new_parallelepiped;
+use crate::tracer::hittable::make_parallelepiped;
 use crate::tracer::pipelines::BVHDebugPipeline;
 use crate::tracer::render::RenderSettings;
 #[allow(unused_imports)]
@@ -16,7 +16,6 @@ use crate::tracer::pipelines::{DefaultPipeline};
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
 use crate::tracer::world::{Background, Scene, SceneBuilder};
-use math::transform::{Transform, Transformable};
 use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
 use tracer::camera::{self, Camera};
@@ -27,6 +26,7 @@ use tracer::material::{ MatGlass, MatLambertDiffuse, MatPrincipled,
     Material, MaterialID
 };
 
+#[allow(unused)]
 fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     let mat_wall = MatLambertDiffuse::new(vec3(0.9, 0.9, 1.0));
     let materials = vec![mat_wall];
@@ -60,6 +60,7 @@ fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     return (scene, camera, render_settings);
 }
 
+#[allow(unused)]
 fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     let mat_glass = MatGlass::new(vec3(1.0, 1.0, 1.0), 1.33);
     let mat_mirror = MatPrincipled::new(vec3(0.9, 0.9, 0.9), 1.0, 0.01);
@@ -72,7 +73,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     const MAT_TABLE: MaterialID     = 2;
     const MAT_WALL: MaterialID      = 3;
 
-    let table = new_parallelepiped(
+    let table = make_parallelepiped(
         vec3(-3.0, -1.0, -1.0),
         vec3(2.0, -1.0, -1.0),
         vec3(-3.0, -1.0, 1.0),
@@ -80,7 +81,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
         MAT_TABLE,
     );
 
-    let right_wall = new_parallelepiped(
+    let right_wall = make_parallelepiped(
         vec3(1.0, 0.0, -1.0),
         vec3(2.0, 0.0, -1.0),
         vec3(1.0, 0.0, 1.0),
@@ -125,6 +126,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     return (scene, camera, render_settings);
 }
 
+#[allow(unused)]
 fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     // World setup
     let mat_table = MatLambertDiffuse::new(Vec3f::new(0.651, 0.541, 0.451));
@@ -134,7 +136,7 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     const MAT_TABLE: MaterialID = 0;
     const MAT_METAL: MaterialID = 1;
 
-    let table = new_parallelepiped(
+    let table = make_parallelepiped(
         vec3(-1.5, -1.0, -1.0),
         vec3(1.5, -1.0, -1.0),
         vec3(-1.5, -1.0, 1.0),

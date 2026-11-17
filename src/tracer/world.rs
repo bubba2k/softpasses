@@ -1,6 +1,6 @@
 use crate::math::vector::{Color, Float, Vec3f};
 use crate::tracer::material::Material;
-use crate::tracer::hittable::{Hittable, HittableTrait};
+use crate::tracer::hittable::{Hittable};
 use crate::tracer::texture::Texture;
 
 type BvhImpl = crate::bvh::custom_impl::BvhCustom<Hittable>;

@@ -1,7 +1,8 @@
 pub mod custom_impl;
 pub mod embree_impl;
 
-use crate::{math::{ray::Ray, util::Interval, vector::Float}, tracer::hittable::{HitRecord, Hittable}};
+use crate::math::{ray::Ray, util::Interval, vector::Float};
+use crate::tracer::hittable::HitRecord;
 
 pub struct QueryResult {
     /// The hit contains a tuple of the index of the hit primitve,
