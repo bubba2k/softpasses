@@ -140,9 +140,6 @@ fn subdivide<T: HittableTrait>(
 ) {
     let node = &mut bvh_nodes[bvh_node_index as usize];
 
-    // Don't split singleton leaves
-    if node.num_prims == 1 { return; }
-
     // At the begin of a node split, the `first` member always points to the first primitive contained by the node.
     // -> The node is currently still "treated as a leaf". We only split
     let begin = node.first as usize;
@@ -157,8 +154,8 @@ fn subdivide<T: HittableTrait>(
     let (axis, split_value) = best_split(node, primitives);
 
     // Sort to the left and right of split value
-    let mut i = node.first;
-    let mut j = i + node.num_prims - 1;
+    let mut i: isize = node.first as isize;
+    let mut j: isize = i + node.num_prims as isize - 1;
     while i < j + 1 {
         if primitives[i as usize].centroid()[axis as usize] < split_value {
             i += 1;
@@ -173,7 +170,7 @@ fn subdivide<T: HittableTrait>(
     *next_free_index += 1;
     let right_idx = *next_free_index;
     *next_free_index += 1;
-    let left_num = i - bvh_nodes[bvh_node_index as usize].first;
+    let left_num = i as u32 - bvh_nodes[bvh_node_index as usize].first;
     let right_num = bvh_nodes[bvh_node_index as usize].num_prims - left_num;
 
     // Handle degenerate splits
@@ -183,7 +180,7 @@ fn subdivide<T: HittableTrait>(
     } else {
         bvh_nodes[left_idx as usize].first = bvh_nodes[bvh_node_index as usize].first;
         bvh_nodes[left_idx as usize].num_prims = left_num;
-        bvh_nodes[right_idx as usize].first = i;
+        bvh_nodes[right_idx as usize].first = i as u32;
         bvh_nodes[right_idx as usize].num_prims = right_num;
         subdivide(bvh_nodes, primitives, left_idx, next_free_index);
         subdivide(bvh_nodes, primitives, right_idx, next_free_index);

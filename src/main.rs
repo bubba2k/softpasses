@@ -111,7 +111,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     let aspect_ratio: Float = width as Float / height as Float;
 
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 64,
+        samples_per_pixel: 4,
         max_bounces: 10,
         image_width: width,
         image_height: height,
