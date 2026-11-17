@@ -2,7 +2,7 @@ use super::material::MaterialID;
 use crate::math::ray::Ray;
 use crate::math::transform::{Transform, Transformable};
 use crate::math::util::Interval;
-use crate::math::vector::{self, CoordinatePlane, Float, Vec3f, project_onto_plane_normalized};
+use crate::math::vector::{Float, Vec3f, project_onto_plane_normalized};
 
 /// Contains 
 pub struct HitRecord {
@@ -81,7 +81,6 @@ pub trait HittableTrait {
 #[derive(Clone)]
 pub enum Hittable {
     Sphere(Sphere),
-    Parallelogram(Parallelogram),
     Plane(Plane),
     Triangle(Triangle),
 }
@@ -90,7 +89,6 @@ impl Transformable for Hittable {
     fn apply_transform(self, transform: &Transform) -> Self {
         match self {
             Hittable::Sphere(sphere) => Hittable::Sphere(sphere.apply_transform(transform)),
-            Hittable::Parallelogram(parallelogram) => Hittable::Parallelogram(parallelogram.apply_transform(transform)),
             Hittable::Plane(plane) => Hittable::Plane(plane.apply_transform(transform)),
             Hittable::Triangle(triangle) => Hittable::Triangle(triangle.apply_transform(transform)),
         }
@@ -101,7 +99,6 @@ impl HittableTrait for Hittable {
     fn centroid(&self) -> Vec3f {
         match self {
             Hittable::Sphere(sphere) => sphere.centroid(),
-            Hittable::Parallelogram(parallelogram) => parallelogram.centroid(),
             Hittable::Plane(plane) => plane.centroid(),
             Hittable::Triangle(triangle) => triangle.centroid(),
         }
@@ -110,7 +107,6 @@ impl HittableTrait for Hittable {
     fn get_aabb(&self) -> AABoundingBox {
         match self {
             Hittable::Sphere(sphere) => sphere.get_aabb(),
-            Hittable::Parallelogram(parallelogram) => parallelogram.get_aabb(),
             Hittable::Plane(plane) => plane.get_aabb(),
             Hittable::Triangle(triangle) => triangle.get_aabb(),
         }
@@ -119,7 +115,6 @@ impl HittableTrait for Hittable {
     fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
         match self {
             Hittable::Sphere(sphere) => sphere.try_intersect(ray, t_interval),
-            Hittable::Parallelogram(parallelogram) => parallelogram.try_intersect(ray, t_interval),
             Hittable::Plane(plane) => plane.try_intersect(ray, t_interval),
             Hittable::Triangle(triangle) => triangle.try_intersect(ray, t_interval),
         }
@@ -128,7 +123,6 @@ impl HittableTrait for Hittable {
     fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
         match self {
             Hittable::Sphere(sphere) => sphere.compute_hit(ray, t),
-            Hittable::Parallelogram(parallelogram) => parallelogram.compute_hit(ray, t),
             Hittable::Plane(plane) => plane.compute_hit(ray, t),
             Hittable::Triangle(triangle) => triangle.compute_hit(ray, t),
         }
@@ -201,7 +195,7 @@ impl AABoundingBox {
             }
             tmin = tmin.max(t0);
             tmax = tmax.min(t1);
-            if tmax <= tmin {
+            if tmax < tmin {
                 return false;
             }
         }
@@ -228,7 +222,7 @@ impl AABoundingBox {
             }
             tmin = tmin.max(t0);
             tmax = tmax.min(t1);
-            if tmax <= tmin {
+            if tmax < tmin {
                 return None;
             }
         }
@@ -403,220 +397,6 @@ impl HittableTrait for Plane {
     }
 }
 
-#[derive(Clone)]
-pub struct Parallelogram {
-    // The plane the rectangle lies on in HNF
-    normal: Vec3f,
-    d: Float,
-
-    // The rectangles 4 corners (on the projection plane) point in CCW order
-    projected_bounds: [Vec3f; 4],
-
-    // The coordinate plane to project intersection point onto for bounds checking
-    projection_plane: vector::CoordinatePlane,
-
-    material_id: MaterialID,
-}
-
-impl Transformable for Parallelogram {
-    fn apply_transform(self, _transform: &Transform) -> Self {
-        todo!()
-    }
-}
-
-impl Parallelogram {
-    pub fn from_points(
-        bottom_left: Vec3f,
-        top_left: Vec3f,
-        bottom_right: Vec3f,
-        material_id: MaterialID,
-    ) -> Hittable {
-        // Together with `bottom_left`, these three letters form represent the plane in parametric form.
-        let up = top_left - bottom_left;
-        let right = bottom_right - bottom_left;
-
-        let normal = right.cross(up).normalize();
-        let distance = (project_onto_plane_normalized(bottom_left, normal) - bottom_left).length();
-
-        let signed_distance = if normal.dot(bottom_left) >= 0.0 {
-            distance
-        } else {
-            -distance
-        };
-
-        // Find the coordinate plane "most parallel" to the rect plane, but most importantly, also avoid any orthogonal ones.
-        let projection_plane = [
-            CoordinatePlane::XY,
-            CoordinatePlane::XZ,
-            CoordinatePlane::YZ,
-        ]
-        .map(|p| (p, p.normal()))
-        .iter()
-        .max_by(|a, b| a.1.dot(normal).abs().total_cmp(&b.1.dot(normal).abs()))
-        .map(|x| x.0)
-        .unwrap();
-
-        let projected_bounds = match projection_plane {
-            CoordinatePlane::XY => {
-                let projected_botleft = bottom_left;
-                let projected_botright = bottom_right;
-                let projected_topleft = top_left;
-                let projected_topright = bottom_right + up;
-
-                if vector::PLANE_XY.dot(normal) > 0.0 {
-                    [
-                        projected_botleft,
-                        projected_botright,
-                        projected_topright,
-                        projected_topleft,
-                    ]
-                } else {
-                    [
-                        projected_topleft,
-                        projected_topright,
-                        projected_botright,
-                        projected_botleft,
-                    ]
-                }
-            }
-            CoordinatePlane::XZ => {
-                // Project onto the XZ plane. So, drop the Y and replace it with the Z coord, since
-                // that is how the bounds checking function expects it later on.
-                let projected_botleft = Vec3f::new(bottom_left.x, bottom_left.z, 0.0);
-                let projected_botright = Vec3f::new(bottom_right.x, bottom_right.z, 0.0);
-                let projected_topleft = Vec3f::new(top_left.x, top_left.z, 0.0);
-                let top_right = bottom_right + up;
-                let projected_topright = Vec3f::new(top_right.x, top_right.z, 0.0);
-
-                if vector::PLANE_XZ.dot(normal) > 0.0 {
-                    [
-                        projected_topleft,
-                        projected_topright,
-                        projected_botright,
-                        projected_botleft,
-                    ]
-                } else {
-                    [
-                        projected_botleft,
-                        projected_botright,
-                        projected_topright,
-                        projected_topleft,
-                    ]
-                }
-            }
-            CoordinatePlane::YZ => {
-                // Project on XY plane. Drop X coordinate.
-                let projected_botleft = Vec3f::new(bottom_left.y, bottom_left.z, 0.0);
-                let projected_botright = Vec3f::new(bottom_right.y, bottom_right.z, 0.0);
-                let projected_topleft = Vec3f::new(top_left.y, top_left.z, 0.0);
-                let top_right = bottom_right + up;
-                let projected_topright = Vec3f::new(top_right.y, top_right.z, 0.0);
-
-                if vector::PLANE_YZ.dot(normal) > 0.0 {
-                    [
-                        projected_botleft,
-                        projected_botright,
-                        projected_topright,
-                        projected_topleft,
-                    ]
-                } else {
-                    [
-                        projected_topleft,
-                        projected_topright,
-                        projected_botright,
-                        projected_botleft,
-                    ]
-                }
-            }
-        };
-
-        Hittable::Parallelogram(Parallelogram {
-            normal: normal.normalize(),
-            d: signed_distance,
-
-            projected_bounds: projected_bounds,
-            projection_plane: projection_plane.clone(),
-
-            material_id
-        })
-    }
-}
-
-impl HittableTrait for Parallelogram {
-    fn compute_hit(&self, ray: &Ray, t: Float) -> HitRecord {
-        HitRecord::new(
-            ray,
-            t,
-            ray.at(t),
-            self.material_id,
-            self.normal,
-        )
-    }
-
-    // Checking for Ray-Parallelogram intersect involves two steps:
-    // 1. Finding intersect point between ray and the plane the rect lies on
-    // 2. Projecting the intersect point and the rectangles bound onto a coordinate plane,
-    //    then perform a 2D Point-Contains-Polygon Check
-    fn try_intersect(&self, ray: &Ray, t_interval: &Interval) -> Option<Float> {
-        // Abort if parallel
-        if self.normal.dot(ray.dir) == 0.0 {
-            return None;
-        }
-
-        let t_intersect = (-self.normal.dot(ray.orig) + self.d) / self.normal.dot(ray.dir);
-
-        if !t_interval.contains(&t_intersect) {
-            return None;
-        }
-
-        let p_intersect = ray.at(t_intersect);
-
-        // Check what coordinate plane we have to project onto.
-        let projected_intersect_point = match self.projection_plane {
-            CoordinatePlane::XY => p_intersect,
-            CoordinatePlane::XZ => Vec3f::new(p_intersect.x, p_intersect.z, 0.0),
-            CoordinatePlane::YZ => Vec3f::new(p_intersect.y, p_intersect.z, 0.0),
-        };
-
-        // Check whether the point we found is inside the rectangles boundaries.
-        // Now perform the classic ole "left of all edges" check. Lets us know whether the projected point
-        // lies inside the projected bounds.
-        let mut is_left_of_all = true;
-        for i in 0..4 {
-            let a = &self.projected_bounds[i];
-            let b = &self.projected_bounds[(i + 1) % 4];
-            if !vector::point_left_of_edge(&projected_intersect_point, a, b) {
-                is_left_of_all = false;
-            }
-        }
-
-        if is_left_of_all {
-            Some(t_intersect)
-        } else {
-            None
-        }
-    }
-
-    fn centroid(&self) -> Vec3f {
-        self.projected_bounds
-            .iter()
-            .map(|p| project_onto_plane_normalized(*p, self.normal) + self.normal * self.d)
-            .sum::<Vec3f>()
-            / 4.0
-    }
-
-    fn get_aabb(&self) -> AABoundingBox {
-        // Project the projected points back onto the parallelogram normal, offset them by the correct
-        // distance along the normal and send them to the aabb
-        let mut aabb: AABoundingBox = AABoundingBox::default();
-        for p in self.projected_bounds.iter() {
-            let point = project_onto_plane_normalized(*p, self.normal) + self.normal * self.d;
-            aabb.expand(&point);
-        }
-        aabb
-    }
-}
-
 fn _new_parallelepiped(
     back_bottom_left: Vec3f,
     back_bottom_right: Vec3f,
@@ -633,50 +413,95 @@ fn _new_parallelepiped(
     let front_bottom_right = back_bottom_right + depth;
     let front_top_right = front_bottom_right + up;
 
-    let mut hittables = Vec::<Hittable>::new();
+    let right = back_bottom_right - back_bottom_left;
 
-    // Front face
-    hittables.push(Parallelogram::from_points(
-        front_bottom_left,
-        front_top_left,
-        front_bottom_right,
-        material_id,
-    ));
-    // Back face
-    hittables.push(Parallelogram::from_points(
-        back_bottom_left,
-        back_top_left,
-        back_bottom_right,
-        material_id,
-    ));
-    // Top face
-    hittables.push(Parallelogram::from_points(
-        front_top_left,
-        back_top_left,
-        front_top_right,
-        material_id,
-    ));
-    // Bottom face
-    hittables.push(Parallelogram::from_points(
-        back_bottom_left,
-        front_bottom_left,
-        back_bottom_right,
-        material_id,
-    ));
-    // Left face
-    hittables.push(Parallelogram::from_points(
-        back_bottom_left,
-        back_top_left,
-        front_bottom_left,
-        material_id,
-    ));
-    // Right face
-    hittables.push(Parallelogram::from_points(
-        back_bottom_right,
-        back_top_right,
-        front_bottom_right,
-        material_id,
-    ));
+    // Each face is a planar quad plus a vector pointing to its outside. The
+    // reference vector only has to point to the outward side; the actual face
+    // normal is derived from the winding below, so non-orthogonal (sheared)
+    // parallelepipeds are handled correctly too.
+    let faces: [([Vec3f; 4], Vec3f); 6] = [
+        // Front
+        (
+            [
+                front_bottom_left,
+                front_bottom_right,
+                front_top_right,
+                front_top_left,
+            ],
+            depth,
+        ),
+        // Back
+        (
+            [
+                back_bottom_left,
+                back_top_left,
+                back_top_right,
+                back_bottom_right,
+            ],
+            -depth,
+        ),
+        // Top
+        (
+            [
+                back_top_left,
+                front_top_left,
+                front_top_right,
+                back_top_right,
+            ],
+            up,
+        ),
+        // Bottom
+        (
+            [
+                back_bottom_left,
+                back_bottom_right,
+                front_bottom_right,
+                front_bottom_left,
+            ],
+            -up,
+        ),
+        // Left
+        (
+            [
+                back_bottom_left,
+                front_bottom_left,
+                front_top_left,
+                back_top_left,
+            ],
+            -right,
+        ),
+        // Right
+        (
+            [
+                back_bottom_right,
+                back_top_right,
+                front_top_right,
+                front_bottom_right,
+            ],
+            right,
+        ),
+    ];
+
+    let mut hittables = Vec::<Hittable>::with_capacity(2 * faces.len());
+    for (mut quad, outward) in faces {
+        // Enforce CCW winding as seen from outside. This also handles a
+        // left-handed (mirrored) input basis.
+        let mut normal = (quad[1] - quad[0]).cross(quad[2] - quad[0]);
+        if normal.dot(outward) < 0.0 {
+            quad.reverse();
+            normal = -normal;
+        }
+        let normal = normal.normalize();
+
+        // Split the quad along the 0-2 diagonal.
+        for positions in [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]] {
+            hittables.push(Hittable::Triangle(Triangle {
+                positions,
+                normals: [normal; 3],
+                material_id,
+            }));
+        }
+    }
 
     hittables
 }
