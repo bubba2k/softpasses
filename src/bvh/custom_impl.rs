@@ -217,48 +217,43 @@ fn build_bvh<T: HittableTrait>(mut primitives: Vec<T>) -> (Vec<T>, Vec<BVHNode>)
     (primitives, bvh_nodes)
 }
 
-fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
-    if bvh_nodes[index].num_prims != 0 {
-        1
+// Functional-style fold for the BVH node tree
+fn fold_bvh<T>(bvh_nodes: &Vec<BVHNode>, index: usize, func_interior: fn(T, T) -> T, func_leaf: fn(&BVHNode) -> T) -> T {
+    if bvh_nodes[index].num_prims != 0 { // Leaf
+        func_leaf(&bvh_nodes[index])
     } else {
-        // Traverse left and right children and sum
-        bvh_count_leaves(bvh_nodes, bvh_nodes[index].first as usize)
-            + bvh_count_leaves(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
+        func_interior(
+            fold_bvh(bvh_nodes, bvh_nodes[index].first as usize, 
+                func_interior, func_leaf),
+            fold_bvh(bvh_nodes, bvh_nodes[index].first as usize + 1, 
+                func_interior, func_leaf)
+        )
     }
+}
+
+fn bvh_count_leaves(bvh_nodes: &Vec<BVHNode>) -> u32 {
+    fold_bvh(bvh_nodes, 0, 
+        |a, b| a + b,
+        |_leaf| 1)
 }
 
 fn bvh_count_prims(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
-    if bvh_nodes[index].num_prims != 0 {
-        bvh_nodes[index].num_prims
-    } else {
-        // Traverse left and right children and sum
-        bvh_count_prims(bvh_nodes, bvh_nodes[index].first as usize)
-            + bvh_count_prims(bvh_nodes, (bvh_nodes[index].first + 1) as usize)
-    }
+    fold_bvh(bvh_nodes, index,
+        u32::strict_add,
+        |leaf| leaf.num_prims
+    )
 }
 
-fn bvh_prims_min(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
-    if bvh_nodes[index].num_prims != 0 {
-        bvh_nodes[index].num_prims
-    } else {
-        // Traverse left and right children and sum
-        bvh_prims_min(bvh_nodes, bvh_nodes[index].first as usize).min(bvh_prims_min(
-            bvh_nodes,
-            (bvh_nodes[index].first + 1) as usize,
-        ))
-    }
+fn bvh_prims_min(bvh_nodes: &Vec<BVHNode>) -> u32 {
+    fold_bvh(bvh_nodes, 0, 
+        u32::min,
+        |leaf| leaf.num_prims)
 }
 
-fn bvh_prims_max(bvh_nodes: &Vec<BVHNode>, index: usize) -> u32 {
-    if bvh_nodes[index].num_prims != 0 {
-        bvh_nodes[index].num_prims
-    } else {
-        // Traverse left and right children and sum
-        bvh_prims_max(bvh_nodes, bvh_nodes[index].first as usize).max(bvh_prims_max(
-            bvh_nodes,
-            (bvh_nodes[index].first + 1) as usize,
-        ))
-    }
+fn bvh_prims_max(bvh_nodes: &Vec<BVHNode>) -> u32 {
+    fold_bvh(bvh_nodes, 0, 
+        u32::max,
+        |leaf| leaf.num_prims)
 }
 
 fn bvh_depth(bvh_nodes: &Vec<BVHNode>, index: usize, depth: u32) -> u32 {
@@ -343,7 +338,7 @@ fn bvh_max_imbalance(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
 fn bvh_avg_imbalance(bvh_nodes: &Vec<BVHNode>) -> f64 {
     let imbalance_sum = bvh_avg_imbalance_rec(bvh_nodes, 0);
     // Subtract number of leaves here, else they would introduce bias.
-    imbalance_sum / (bvh_count_nodes(bvh_nodes, 0) - bvh_count_leaves(bvh_nodes, 0)) as f64
+    imbalance_sum / (bvh_count_nodes(bvh_nodes, 0) - bvh_count_leaves(bvh_nodes)) as f64
 }
 
 fn bvh_avg_imbalance_rec(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
@@ -359,15 +354,15 @@ fn bvh_avg_imbalance_rec(bvh_nodes: &Vec<BVHNode>, index: usize) -> f64 {
 
 fn bvh_info(bvh_nodes: &Vec<BVHNode>) {
     let num_primitives = bvh_count_prims(bvh_nodes, 0);
-    let num_leaves = bvh_count_leaves(bvh_nodes, 0);
+    let num_leaves = bvh_count_leaves(bvh_nodes);
     let num_nodes = bvh_count_nodes(bvh_nodes, 0);
     let depth = bvh_depth(bvh_nodes, 0, 0);
     let shallowness = bvh_shallowness(bvh_nodes, 0, 0);
     let avg_imbalance = bvh_avg_imbalance(bvh_nodes);
     let min_imbalance = bvh_min_imbalance(bvh_nodes, 0);
     let max_imbalance = bvh_max_imbalance(bvh_nodes, 0);
-    let min_leaf_prims = bvh_prims_min(bvh_nodes, 0);
-    let max_leaf_prims = bvh_prims_max(bvh_nodes, 0);
+    let min_leaf_prims = bvh_prims_min(bvh_nodes);
+    let max_leaf_prims = bvh_prims_max(bvh_nodes);
 
     eprintln!(
         "Num nodes: {}\nNum prims: {}\nNum leafs: {}\nMin prims: {}\nMax prims: {}\n: {:.3}\nDepth: {}\nShallowness {}",
