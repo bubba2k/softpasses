@@ -3,7 +3,7 @@ use crate::tracer::material::Material;
 use crate::tracer::hittable::{Hittable};
 use crate::tracer::texture::Texture;
 
-type BvhImpl = crate::bvh::custom_impl::BvhCustom<Hittable>;
+type BvhImpl = crate::bvh::embree_impl::BvhEmbree;
 
 pub struct SceneBuilder {
     pub hittables: Vec<Hittable>,
@@ -47,7 +47,7 @@ impl SceneBuilder {
 
     pub fn build(self) -> Scene {
         Scene {
-            objects_bvh: BvhImpl::new(self.hittables),
+            objects_bvh: BvhImpl::try_new(self.hittables).unwrap(),
             materials: self.materials,
             background: self.background,
         }

@@ -397,15 +397,15 @@ impl<T: HittableTrait> BvhTrait for BvhCustom<T> {
 }
 
 impl<T: HittableTrait> BvhCustom<T> {
-    pub fn new(list: Vec<T>) -> BvhCustom<T> {
+    pub fn try_new(list: Vec<T>) -> Option<BvhCustom<T>> {
         eprintln!("Building scene bvh");
 
         let (hittables, bvh_nodes) = build_bvh(list);
 
-        Self {
+        Some(Self {
             hittables: hittables,
             nodes: bvh_nodes,
-        }
+        })
     }
 
     fn try_hit_ordered(&self, ray: &Ray, t_interval: &Interval) -> super::QueryResult {
