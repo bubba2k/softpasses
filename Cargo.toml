@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 chrono = "0.4.41"
-embree4-sys = { git = "https://github.com/bubba2k/embree4-sys.git" }
+embree4-sys = { git = "https://github.com/mixiate/embree4-sys.git" }
 fastrand = "2.3.0"
 glam = "0.30.5"
 image = "0.25.6"
@@ -18,6 +18,7 @@ rayon = "1.10.0"
 tobj = "4.0.3"
 
 [patch.crates-io]
-# TODO: A pull request for this patch has been submitted to the original crate (https://github.com/psytrx/embree4-sys)
-#       Remove this patch once its merged and updated.
-embree4-sys = { git = "https://github.com/bubba2k/embree4-sys.git" }
+# Upstream (psytrx/embree4-sys) still vendors Embree 4.2 headers. This fork
+# updates them to 4.4.1, so the generated bindings (notably `RTCHit` with
+# `instPrimID`) match the ABI of the installed Embree runtime.
+embree4-sys = { git = "https://github.com/mixiate/embree4-sys.git" }
