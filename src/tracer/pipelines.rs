@@ -6,7 +6,7 @@ use super::material::MaterialTrait;
 use crate::bvh::BvhTrait;
 use crate::math::ray::Ray;
 use crate::math::vector::{Color, vec3_from_dvec3};
-use crate::tracer::world::Scene;
+use crate::tracer::scene::Scene;
 
 use crate::tracer::render::RenderSettings;
 

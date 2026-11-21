@@ -6,7 +6,7 @@ use crate::math::util::{self, ImageRegion};
 use crate::math::vector::{Color, Float};
 use crate::tracer::camera::Camera;
 use crate::tracer::texture::Texture;
-use crate::tracer::world::Scene;
+use crate::tracer::scene::Scene;
 use std::collections::HashMap;
 use crate::tracer::pipelines::RenderPipeline;
 

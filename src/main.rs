@@ -15,7 +15,7 @@ use crate::tracer::pipelines::{DefaultPipeline};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
-use crate::tracer::world::{Background, Scene, SceneBuilder};
+use crate::tracer::scene::{Background, Scene, SceneBuilder};
 use math::util::Interval;
 use math::vector::{Float, Vec3f, vec3};
 use tracer::camera::{self, Camera};
@@ -35,7 +35,8 @@ fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     let sponza = io::mesh::load_obj_file(Path::new("assets/models/sponza_merged.obj"), MAT_WALL);
 
     let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
-    let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
+    // let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
+    let background = Background::from_solid_color(vec3(1.0, 0.8, 0.8));
 
     let scene = SceneBuilder::new().add_hittables(sponza).set_background(background).set_materials(materials).build();
 
@@ -45,8 +46,8 @@ fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     let aspect_ratio: Float = width as Float / height as Float;
 
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 1,
-        max_bounces: 5,
+        samples_per_pixel: 2000,
+        max_bounces: 100,
         image_width: width,
         image_height: height,
         ray_limits: Interval::new(0.001, 1000.0),
@@ -111,7 +112,7 @@ fn glass_bunny_scene_setup() -> (Scene, Camera, RenderSettings) {
     let aspect_ratio: Float = width as Float / height as Float;
 
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 64,
+        samples_per_pixel: 2000,
         max_bounces: 10,
         image_width: width,
         image_height: height,
@@ -162,7 +163,7 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     let aspect_ratio: Float = width as Float / height as Float;
 
     let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 64,
+        samples_per_pixel: 2000,
         max_bounces: 6,
         image_width: width,
         image_height: height,
