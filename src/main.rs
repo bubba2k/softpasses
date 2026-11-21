@@ -190,15 +190,25 @@ fn main() -> Result<(), String> {
         )))
     };
 
-    let (world, camera, render_settings) = glass_bunny_scene_setup();
+    // let (scene, camera, render_settings) = glass_bunny_scene_setup();
+
+    let (scene, camera) = io::scene::load_gltf(std::path::Path::new("./scenes/bmw-m6/gltf/bmw_m6_core.gltf"))?;
+
+    let render_settings = tracer::render::RenderSettings {
+        samples_per_pixel: 1000,
+        max_bounces: 6,
+        image_width: 1920,
+        image_height: 1080,
+        ray_limits: Interval::new(0.001, 1000.0),
+    };
 
     let postproc_settings = PostProcessSettings {};
 
     let scheduler = TiledScheduler::new(64);
     let render_result =
-        scheduler.render::<DefaultPipeline, 3>(camera.clone(), render_settings.clone(), &world);
+        scheduler.render::<DefaultPipeline, 3>(camera.clone(), render_settings.clone(), &scene);
     eprintln!("{}", render_result.to_string());
-    let bvh_result = scheduler.render::<BVHDebugPipeline, 3>(camera.clone(), render_settings.clone(), &world);
+    let bvh_result = scheduler.render::<BVHDebugPipeline, 3>(camera.clone(), render_settings.clone(), &scene);
     eprintln!("{}", bvh_result.to_string());
 
     let render_postproc_result = postprocess(&render_result, &postproc_settings);

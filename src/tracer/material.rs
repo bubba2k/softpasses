@@ -23,6 +23,7 @@ pub enum Material {
     MatPrincipled(MatPrincipled),
     MatGlass(MatGlass),
     MatEmission(MatEmission),
+    MatGltfPbr(MatGltfPbr),
 }
 
 impl MaterialTrait for Material {
@@ -32,6 +33,7 @@ impl MaterialTrait for Material {
             Material::MatLambertDiffuse(mat) => mat.scatter(ray_in, hit),
             Material::MatPrincipled(mat) => mat.scatter(ray_in, hit),
             Material::MatGlass(mat) => mat.scatter(ray_in, hit),
+            Material::MatGltfPbr(mat) => mat.scatter(ray_in, hit),
         }
     }
 
@@ -257,5 +259,87 @@ impl MaterialTrait for MatGlass {
 impl MatGlass {
     pub fn new(c: Color, ior: Float) -> Material {
         Material::MatGlass(MatGlass { color: c, ior: ior })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfTextureInfo {
+    pub texture_index: usize,
+    pub tex_coord: u32,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfNormalTexture {
+    pub texture_index: usize,
+    pub tex_coord: u32,
+    pub scale: Float,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GltfOcclusionTexture {
+    pub texture_index: usize,
+    pub tex_coord: u32,
+    pub strength: Float,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MatGltfPbr {
+    pub base_color_factor: [Float; 4],
+    pub base_color_texture: Option<GltfTextureInfo>,
+    pub metallic_factor: Float,
+    pub roughness_factor: Float,
+    pub metallic_roughness_texture: Option<GltfTextureInfo>,
+    pub normal_texture: Option<GltfNormalTexture>,
+    pub occlusion_texture: Option<GltfOcclusionTexture>,
+    pub emissive_factor: [Float; 3],
+    pub emissive_texture: Option<GltfTextureInfo>,
+    pub emissive_strength: Option<Float>,
+    pub alpha_mode: String,
+    pub alpha_cutoff: Option<Float>,
+    pub double_sided: bool,
+}
+
+impl MatGltfPbr {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        base_color_factor: [Float; 4],
+        base_color_texture: Option<GltfTextureInfo>,
+        metallic_factor: Float,
+        roughness_factor: Float,
+        metallic_roughness_texture: Option<GltfTextureInfo>,
+        normal_texture: Option<GltfNormalTexture>,
+        occlusion_texture: Option<GltfOcclusionTexture>,
+        emissive_factor: [Float; 3],
+        emissive_texture: Option<GltfTextureInfo>,
+        emissive_strength: Option<Float>,
+        alpha_mode: String,
+        alpha_cutoff: Option<Float>,
+        double_sided: bool,
+    ) -> Material {
+        Material::MatGltfPbr(MatGltfPbr {
+            base_color_factor,
+            base_color_texture,
+            metallic_factor,
+            roughness_factor,
+            metallic_roughness_texture,
+            normal_texture,
+            occlusion_texture,
+            emissive_factor,
+            emissive_texture,
+            emissive_strength,
+            alpha_mode,
+            alpha_cutoff,
+            double_sided,
+        })
+    }
+}
+
+impl MaterialTrait for MatGltfPbr {
+    fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
+        MatLambertDiffuse::new(vec3(0.3, 0.3, 0.3)).scatter(ray_in, hit)
+    }
+
+    fn random_instance() -> Self {
+        unimplemented!("glTF PBR random material generation is not implemented yet")
     }
 }

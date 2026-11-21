@@ -8,6 +8,7 @@ chrono = "0.4.41"
 embree4-sys = { git = "https://github.com/mixiate/embree4-sys.git" }
 fastrand = "2.3.0"
 glam = "0.30.5"
+gltf = "1.4.1"
 image = "0.25.6"
 itertools = "0.14.0"
 load_image = "3.3.0"
