@@ -4,6 +4,7 @@ use glam::DVec3;
 
 use super::material::MaterialTrait;
 use crate::bvh::BvhTrait;
+use crate::math;
 use crate::math::ray::Ray;
 use crate::math::vector::{Color, vec3_from_dvec3};
 use crate::tracer::scene::Scene;
@@ -47,6 +48,107 @@ pub trait RenderPipeline<const N: usize> {
 
     /// Erase accumulated samples
     fn clear(&mut self);
+}
+
+// Only computes color.
+pub struct ColorPipeline {
+    sum: glam::DVec3,
+    num_accumulated_samples: u32,
+}
+
+impl Default for ColorPipeline {
+    fn default() -> Self {
+        ColorPipeline {
+            sum: DVec3::ZERO,
+            num_accumulated_samples: 0,
+        }
+    }
+}
+
+
+impl RenderPipeline<1> for ColorPipeline {
+    fn pass_names(i: usize) -> String {
+        String::from(["color", "albedo", "normal"][i])
+    }
+
+    fn accumulate_sample(
+        &mut self,
+        ray: &Ray,
+        settings: &RenderSettings,
+        world: &Scene,
+    ) {
+        let sample = Self::trace_sample(ray, settings, world);
+        self.sum += DVec3::from(sample[0]);
+        self.num_accumulated_samples += 1;
+    }
+
+    fn clear(&mut self) {
+        self.sum = DVec3::ZERO;
+        self.num_accumulated_samples = 0;
+    }
+
+    fn yield_estimate(&self) -> [Color; 1] {
+        let samples_inv = 1.0 / self.num_accumulated_samples as f64;
+        let estimate: Color = vec3_from_dvec3(self.sum * samples_inv);
+
+        [estimate]
+    }
+
+    fn trace_sample(
+        ray: &Ray,
+        settings: &RenderSettings,
+        world: &Scene,
+    ) -> [Color; 1] {
+        static COLOR_BLACK: Color = Color::new(0.0, 0.0, 0.0);
+        // Initialize ray_color to the multiplicative neutral element.
+        let mut ray_color: Color = Color::new(1.0, 1.0, 1.0);
+
+        let mut current_ray: Ray = ray.clone();
+        let mut bounce_counter = 0;
+        loop {
+            if bounce_counter == settings.max_bounces {
+                // If max bounces where reached, the ray never hit a light source
+                return [COLOR_BLACK];
+            }
+            // Fire the ray. See if it hits anything.
+            if let Some(hit) =
+                world
+                    .objects_bvh.try_hit(&current_ray, &settings.ray_limits)
+            {
+                // Get a reference to the actual material
+                let hit_material = &world.materials[hit.material_id as usize];
+
+                match hit_material.scatter(&current_ray, &hit) {
+                    (Some(scatter_ray), Some(color_att)) => {
+                        // Fire the reflected/scattered ray we got from the material and surface information.
+                        // Attenuate with the color attenuation applied by the material.
+                        current_ray = scatter_ray;
+                        ray_color = ray_color * color_att;
+                    }
+                    (Some(scatter_ray), None) => {
+                        // The ray was reflected, but the color not attenuated.
+                        // Simply shoot the new, attenuated ray.
+                        current_ray = scatter_ray;
+                    }
+                    (None, Some(color_att)) => {
+                        // Ray absorbed. Do one last attenuation and return.
+                        return [ray_color * color_att];
+                    }
+                    (None, None) => {
+                        // The ray was absorbed and no attenuation color was given.
+                        // This should not happen, but we have to handle the case. Assume a black hole.
+                        return [COLOR_BLACK];
+                    }
+                }
+            } else {
+                // If the ray did not hit objects, we assume it hit the background / sky.
+                return [
+                    ray_color * world.background.sample(current_ray.dir)];
+            }
+
+            bounce_counter = bounce_counter + 1;
+        }
+    }
 }
 
 /// The default pipeline that computes color, albedo and normal passes.

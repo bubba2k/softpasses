@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use crate::postproc::{PostProcessSettings, postprocess};
 use crate::tracer::hittable::make_parallelepiped;
-use crate::tracer::pipelines::BVHDebugPipeline;
+use crate::tracer::pipelines::{BVHDebugPipeline, ColorPipeline};
 use crate::tracer::render::RenderSettings;
 #[allow(unused_imports)]
 use crate::tracer::pipelines::{DefaultPipeline};
@@ -192,7 +192,12 @@ fn main() -> Result<(), String> {
 
     // let (scene, camera, render_settings) = glass_bunny_scene_setup();
 
-    let (scene, camera) = io::scene::load_gltf(std::path::Path::new("./scenes/bmw-m6/gltf/bmw_m6_core.gltf"))?;
+    let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
+    let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
+
+    let (mut scene, camera) = io::scene::load_gltf(std::path::Path::new("./scenes/bathroom/gltf/bathroom_core.gltf"))?;
+
+    scene.background = background;
 
     let render_settings = tracer::render::RenderSettings {
         samples_per_pixel: 1000,
@@ -206,21 +211,16 @@ fn main() -> Result<(), String> {
 
     let scheduler = TiledScheduler::new(64);
     let render_result =
-        scheduler.render::<DefaultPipeline, 3>(camera.clone(), render_settings.clone(), &scene);
+        scheduler.render::<ColorPipeline, 1>(camera.clone(), render_settings.clone(), &scene);
     eprintln!("{}", render_result.to_string());
-    let bvh_result = scheduler.render::<BVHDebugPipeline, 3>(camera.clone(), render_settings.clone(), &scene);
-    eprintln!("{}", bvh_result.to_string());
 
     let render_postproc_result = postprocess(&render_result, &postproc_settings);
-    let bvh_postproc_result = postprocess(&bvh_result, &postproc_settings);
 
     if let Some(output_dir) = output_dir {
         render_result.write_images(output_dir.as_path(), ".exr")?;
         render_result.dump_info(&output_dir)?;
         render_postproc_result.write_images(output_dir.as_path())?;
 
-        bvh_result.write_images(output_dir.as_path(), ".exr")?;
-        bvh_postproc_result.write_images(output_dir.as_path())?;
     }
 
     Ok(())

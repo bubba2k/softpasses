@@ -336,7 +336,10 @@ impl MatGltfPbr {
 
 impl MaterialTrait for MatGltfPbr {
     fn scatter(&self, ray_in: &Ray, hit: &HitRecord) -> (Option<Ray>, Option<Color>) {
-        MatLambertDiffuse::new(vec3(0.3, 0.3, 0.3)).scatter(ray_in, hit)
+        MatPrincipled::new(vec3(
+            self.base_color_factor[0], self.base_color_factor[1], self.base_color_factor[2]),
+            1.0 - self.roughness_factor, 
+        0.0).scatter(ray_in, hit)
     }
 
     fn random_instance() -> Self {
