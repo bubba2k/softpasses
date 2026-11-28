@@ -243,6 +243,30 @@ where
         state.done && (state.failed || state.completed_tiles == state.total_tiles)
     }
 
+    pub fn progress(&self) -> (usize, usize) {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        (state.completed_tiles, state.total_tiles)
+    }
+
+    pub fn yield_preview_pass(&self, pass_index: usize) -> Option<Texture> {
+        if pass_index >= N {
+            return None;
+        }
+
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Some(Texture::from_raw(
+            self.width as usize,
+            self.height as usize,
+            state.passes[pass_index].clone(),
+        ))
+    }
+
     pub fn yield_preview(&self) -> [Texture; N] {
         let state = self
             .state
@@ -588,9 +612,9 @@ mod live_scheduler_tests {
             state: Arc::new(Mutex::new(LiveSchedulerState {
                 passes: [vec![Color::new(0.25, 0.5, 0.75)]],
                 completed_tiles: 1,
-                total_tiles: 1,
+                total_tiles: 2,
                 elapsed: 0.5,
-                done: true,
+                done: false,
                 failed: false,
                 result_taken: false,
             })),
@@ -603,10 +627,21 @@ mod live_scheduler_tests {
             _pipeline: std::marker::PhantomData,
         };
 
+        assert_eq!(scheduler.progress(), (1, 2));
+        assert!(!scheduler.is_done());
+        let preview = scheduler.yield_preview_pass(0).unwrap();
+        assert_eq!(preview.width, 1);
+        assert_eq!(preview.height, 1);
+        assert_eq!(preview.data[0], Color::new(0.25, 0.5, 0.75));
+        assert!(scheduler.yield_preview_pass(1).is_none());
+
+        {
+            let mut state = scheduler.state.lock().unwrap();
+            state.completed_tiles = 2;
+            state.done = true;
+        }
+        assert_eq!(scheduler.progress(), (2, 2));
         assert!(scheduler.is_done());
-        let preview = scheduler.yield_preview();
-        assert_eq!(preview[0].width, 1);
-        assert_eq!(preview[0].data[0], Color::new(0.25, 0.5, 0.75));
 
         let result = scheduler.try_yield_result().unwrap();
         assert_eq!(

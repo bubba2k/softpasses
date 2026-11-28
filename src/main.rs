@@ -4,14 +4,12 @@ mod postproc;
 mod tracer;
 mod bvh;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::postproc::{PostProcessSettings, postprocess};
 use crate::tracer::hittable::make_parallelepiped;
-use crate::tracer::pipelines::{BVHDebugPipeline, ColorPipeline};
-use crate::tracer::render::{LiveScheduler, RenderResult, RenderSettings};
-#[allow(unused_imports)]
-use crate::tracer::pipelines::{DefaultPipeline};
+use crate::tracer::pipelines::DefaultPipeline;
+use crate::tracer::render::{LiveScheduler, RenderSettings};
 #[allow(unused_imports)]
 use crate::tracer::render::{Scheduler, TiledScheduler};
 use crate::tracer::texture::Texture;
@@ -223,6 +221,23 @@ struct Args {
     /// Enable postprocessing (denoising with Intel OIDN, basic tonemapping).
     #[arg(long, default_value_t = false)]
     postprocess: bool,
+
+    /// Show a live preview while rendering.
+    #[arg(long, default_value_t = false)]
+    preview: bool,
+}
+
+fn texture_to_window_pixels(texture: &Texture) -> Vec<u32> {
+    texture
+        .data
+        .iter()
+        .map(|color| {
+            let red = (color.x.clamp(0.0, 1.0) * 255.0).round() as u32;
+            let green = (color.y.clamp(0.0, 1.0) * 255.0).round() as u32;
+            let blue = (color.z.clamp(0.0, 1.0) * 255.0).round() as u32;
+            (red << 16) | (green << 8) | blue
+        })
+        .collect()
 }
 
 fn main() -> Result<(), String> {
@@ -240,13 +255,58 @@ fn main() -> Result<(), String> {
 
     let scene = scene_builder.build();
 
-    let mut scheduler = LiveScheduler::<DefaultPipeline, 3>::run(camera, render_settings, scene, args.tile_size);
+    let mut preview_window = if args.preview {
+        if args.width == 0 || args.height == 0 {
+            return Err("Preview window requires non-zero image dimensions".to_owned());
+        }
+        let mut window = minifb::Window::new(
+            "softpasses render",
+            args.width as usize,
+            args.height as usize,
+            minifb::WindowOptions::default(),
+        )
+        .map_err(|error| format!("Failed to create preview window: {error}"))?;
+        window.set_target_fps(30);
+        Some(window)
+    } else {
+        None
+    };
 
-    while !scheduler.is_done() {
-        
+    let mut scheduler = LiveScheduler::<DefaultPipeline, 3>::run(camera, render_settings, scene, args.tile_size);
+    let mut framebuffer = vec![0; args.width as usize * args.height as usize];
+    let mut last_preview_progress = None;
+
+    loop {
+        let done = scheduler.is_done();
+        if let Some(window) = preview_window.as_mut() {
+            if !window.is_open() {
+                preview_window = None;
+            } else {
+                let progress = scheduler.progress();
+                if last_preview_progress != Some(progress) {
+                    if let Some(preview) = scheduler.yield_preview_pass(0) {
+                        framebuffer = texture_to_window_pixels(&preview);
+                    }
+                    window.set_title(&format!(
+                        "softpasses render - tiles {}/{}",
+                        progress.0, progress.1
+                    ));
+                    last_preview_progress = Some(progress);
+                }
+                window
+                    .update_with_buffer(&framebuffer, args.width as usize, args.height as usize)
+                    .map_err(|error| format!("Failed to update preview window: {error}"))?;
+            }
+        } else if done {
+            break;
+        } else {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
-    let render_result = scheduler.try_yield_result().unwrap();
+    let render_result = scheduler
+        .try_yield_result()
+        .ok_or_else(|| "Rendering failed before producing a result".to_owned())?;
 
     let output_path = std::path::Path::new(&args.output_directory);
     eprintln!("{}", render_result.to_string());
@@ -260,4 +320,23 @@ fn main() -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    #[test]
+    fn preview_pixels_clamp_round_and_pack_rgb() {
+        let texture = Texture::from_raw(
+            2,
+            1,
+            vec![
+                vec3(0.25, 0.5, 1.5),
+                vec3(-0.2, 0.0, 1.0),
+            ],
+        );
+
+        assert_eq!(texture_to_window_pixels(&texture), vec![0x0040_80ff, 0x0000_00ff]);
+    }
 }
