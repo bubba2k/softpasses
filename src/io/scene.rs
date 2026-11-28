@@ -207,7 +207,7 @@ fn traverse_nodes(
     Ok(())
 }
 
-pub fn load_gltf(path: &Path) -> Result<(tracer::scene::Scene, Camera), String> {
+pub fn load_gltf(path: &Path) -> Result<(tracer::scene::SceneBuilder, Camera), String> {
     let (document, buffers, _images) = gltf::import(path)
         .map_err(|error| format!("failed to import glTF file {}: {error}", path.display()))?;
 
@@ -251,11 +251,10 @@ pub fn load_gltf(path: &Path) -> Result<(tracer::scene::Scene, Camera), String> 
     let camera = camera
         .ok_or_else(|| "glTF file contains no perspective camera in the selected scene".to_string())?;
 
-    let scene = SceneBuilder::new()
+    let scene_builder = SceneBuilder::new()
         .set_materials(materials)
         .set_background(Background::from_solid_color(Vec3::ONE))
-        .add_hittables(hittables)
-        .build();
+        .add_hittables(hittables);
 
-    Ok((scene, camera))
+    Ok((scene_builder, camera))
 }

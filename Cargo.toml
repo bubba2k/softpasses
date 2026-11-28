@@ -1,10 +1,11 @@
 [package]
-name = "weekend_of_rays"
+name = "softpasses"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 chrono = "0.4.41"
+clap = { version = "4.6.10", features = ["derive"] }
 embree4-sys = { git = "https://github.com/mixiate/embree4-sys.git" }
 fastrand = "2.3.0"
 glam = "0.30.5"

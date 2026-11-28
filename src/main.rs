@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::postproc::{PostProcessSettings, postprocess};
 use crate::tracer::hittable::make_parallelepiped;
 use crate::tracer::pipelines::{BVHDebugPipeline, ColorPipeline};
-use crate::tracer::render::RenderSettings;
+use crate::tracer::render::{RenderResult, RenderSettings};
 #[allow(unused_imports)]
 use crate::tracer::pipelines::{DefaultPipeline};
 #[allow(unused_imports)]
@@ -26,6 +26,7 @@ use tracer::material::{ MatGlass, MatLambertDiffuse, MatPrincipled,
     Material, MaterialID
 };
 
+// The following three scene setups are no longer used directly, but remain here for reference until they have succesfully been ported to a GLTF file.
 #[allow(unused)]
 fn sponza_scene_setup() -> (Scene, Camera, RenderSettings) {
     let mat_wall = MatLambertDiffuse::new(vec3(0.9, 0.9, 1.0));
@@ -178,49 +179,78 @@ fn stanford_dragon_scene_setup() -> (Scene, Camera, RenderSettings) {
     return (scene, camera, render_settings);
 }
 
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// The width of the output image (in pixels).
+    #[arg(short, long)]
+    width: u32,
+
+    /// The height of the output image (in pixels).
+    #[arg(short, long)]
+    height: u32,
+
+    /// How many samples to take per pixel.
+    #[arg(long)]
+    spp: u32,
+
+    /// The maximum allowed number of bounces before a ray terminates.
+    #[arg(short, long, default_value_t = 32)]
+    bounces: u32,
+
+    /// The size of the tiles (in pixels) an image is divided into for rendering.
+    #[arg(long, default_value_t = 32)]
+    tile_size: u32,
+
+    /// The far clipping plane of the camera.
+    #[arg(long, default_value_t = 0.001)]
+    clip_near: f32,
+
+    /// The near clipping plane of the camera.
+    #[arg(long, default_value_t = 1000.0)]
+    clip_far: f32,
+
+    /// The GLTF file to render.
+    #[arg(short)]
+    input_file: String,
+
+    /// The directory to save the render output to.
+    #[arg(short)]
+    output_directory: String,
+
+    /// Enable postprocessing (denoising with Intel OIDN, basic tonemapping).
+    #[arg(long, default_value_t = false)]
+    postprocess: bool,
+}
+
 fn main() -> Result<(), String> {
-    let args: Vec<String> = std::env::args().collect();
+    let args = Args::parse();
 
-    let output_dir: Option<PathBuf> = if args.len() != 2 {
-        eprintln!("No output directory specified. Starting dry run...\n");
-        None
-    } else {
-        Some(PathBuf::from(std::env::args().nth(1).expect(
-            "Please provide an output directory as the first argument.",
-        )))
-    };
-
-    // let (scene, camera, render_settings) = glass_bunny_scene_setup();
-
-    let env_texture = Texture::from_path(Path::new("assets/hdri/brownstudio_4k.hdr")).unwrap();
-    let background = Background::from_environment_texture(env_texture, 2.85, 0.15);
-
-    let (mut scene, camera) = io::scene::load_gltf(std::path::Path::new("./scenes/bathroom/gltf/bathroom_core.gltf"))?;
-
-    scene.background = background;
-
-    let render_settings = tracer::render::RenderSettings {
-        samples_per_pixel: 1000,
-        max_bounces: 6,
-        image_width: 1920,
-        image_height: 1080,
+    let render_settings = RenderSettings {
+        image_width: args.width,
+        image_height: args.height,
+        samples_per_pixel: args.spp as u32,
+        max_bounces: args.bounces,
         ray_limits: Interval::new(0.001, 1000.0),
     };
 
-    let postproc_settings = PostProcessSettings {};
+    let (scene_builder, camera) = io::scene::load_gltf(std::path::Path::new(&args.input_file))?;
+    let scheduler = TiledScheduler::new(args.tile_size);
 
-    let scheduler = TiledScheduler::new(64);
-    let render_result =
-        scheduler.render::<ColorPipeline, 1>(camera.clone(), render_settings.clone(), &scene);
+    let scene = scene_builder.build();
+
+    let render_result = scheduler.render::<DefaultPipeline, 3>(camera, render_settings, &scene);
+    let output_path = std::path::Path::new(&args.output_directory);
     eprintln!("{}", render_result.to_string());
+    render_result.dump_info(output_path)?;
+    render_result.write_images(output_path, ".exr")?;
 
-    let render_postproc_result = postprocess(&render_result, &postproc_settings);
-
-    if let Some(output_dir) = output_dir {
-        render_result.write_images(output_dir.as_path(), ".exr")?;
-        render_result.dump_info(&output_dir)?;
-        render_postproc_result.write_images(output_dir.as_path())?;
-
+    if args.postprocess {
+        let postproc_settings: PostProcessSettings = PostProcessSettings{};
+        let postproc_results = postprocess(&render_result, &postproc_settings);
+        postproc_results.write_images(output_path)?;
     }
 
     Ok(())
