@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::postproc::{PostProcessSettings, postprocess};
 use crate::tracer::hittable::make_parallelepiped;
 use crate::tracer::pipelines::{BVHDebugPipeline, ColorPipeline};
-use crate::tracer::render::{RenderResult, RenderSettings};
+use crate::tracer::render::{LiveScheduler, RenderResult, RenderSettings};
 #[allow(unused_imports)]
 use crate::tracer::pipelines::{DefaultPipeline};
 #[allow(unused_imports)]
@@ -237,11 +237,17 @@ fn main() -> Result<(), String> {
     };
 
     let (scene_builder, camera) = io::scene::load_gltf(std::path::Path::new(&args.input_file))?;
-    let scheduler = TiledScheduler::new(args.tile_size);
 
     let scene = scene_builder.build();
 
-    let render_result = scheduler.render::<DefaultPipeline, 3>(camera, render_settings, &scene);
+    let mut scheduler = LiveScheduler::<DefaultPipeline, 3>::run(camera, render_settings, scene, args.tile_size);
+
+    while !scheduler.is_done() {
+        
+    }
+
+    let render_result = scheduler.try_yield_result().unwrap();
+
     let output_path = std::path::Path::new(&args.output_directory);
     eprintln!("{}", render_result.to_string());
     render_result.dump_info(output_path)?;

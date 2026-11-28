@@ -67,6 +67,11 @@ pub struct BvhEmbree {
 // so sharing the BVH between threads is fine.
 unsafe impl Sync for BvhEmbree {}
 
+// Embree handles are not tied to their creating thread. Moving this value
+// transfers exclusive ownership; the committed scene is queried immutably and
+// is released only after all borrowed queries have completed.
+unsafe impl Send for BvhEmbree {}
+
 /// Read three consecutive `f32` from an Embree-owned buffer.
 unsafe fn read_vec3(ptr: *const f32, offset: usize) -> Vec3f {
     unsafe { Vec3f::new(*ptr.add(offset), *ptr.add(offset + 1), *ptr.add(offset + 2)) }
